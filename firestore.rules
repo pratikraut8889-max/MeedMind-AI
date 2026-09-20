@@ -1,0 +1,162 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net (Default-deny catch-all)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper Functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Entity Validations
+    function isValidUserProfile(data) {
+      return data.uid == request.auth.uid
+        && data.email is string && data.email.size() <= 200
+        && (data.displayName == null || (data.displayName is string && data.displayName.size() <= 100))
+        && (data.location == null || (data.location is string && data.location.size() <= 100))
+        && (data.accessibilitySettings == null || (
+             data.accessibilitySettings is map
+             && data.accessibilitySettings.mode in ['STANDARD', 'HIGH_CONTRAST']
+             && data.accessibilitySettings.fontSize in ['SMALL', 'MEDIUM', 'LARGE']
+             && data.accessibilitySettings.dyslexicFont is bool
+           ));
+    }
+
+    function isValidMedication(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 100
+        && data.dosage is string && data.dosage.size() <= 50
+        && data.frequency is string && data.frequency.size() <= 50
+        && data.time is string && data.time.size() == 5 && data.time.matches('^[0-9]{2}:[0-9]{2}$')
+        && data.instructions is string && data.instructions.size() <= 500
+        && (data.lastTakenDate == null || (data.lastTakenDate is string && data.lastTakenDate.size() <= 10))
+        && (data.lastNotificationDate == null || (data.lastNotificationDate is string && data.lastNotificationDate.size() <= 10));
+    }
+
+    function isValidMoodEntry(data) {
+      return data.date is string && data.date.size() <= 10
+        && data.mood in ['great', 'good', 'okay', 'sad', 'terrible'];
+    }
+
+    function isValidStoredReport(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.date is int
+        && data.fileName is string && data.fileName.size() <= 200
+        && data.result is map;
+    }
+
+    function isValidVaccine(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 100
+        && data.dateGiven is string && data.dateGiven.size() <= 10
+        && (data.nextDueDate == null || (data.nextDueDate is string && data.nextDueDate.size() <= 10))
+        && data.status in ['VALID', 'EXPIRED', 'UPCOMING']
+        && data.notes is string && data.notes.size() <= 500;
+    }
+
+    function isValidHealthHistory(data) {
+      return data.conditions is list
+        && data.surgeries is list
+        && data.familyHistory is list
+        && data.allergies is list
+        && data.bloodType is string && data.bloodType.size() <= 5
+        && data.organDonor is bool
+        && (data.emergencyContacts == null || data.emergencyContacts is list)
+        && (data.metrics == null || data.metrics is list);
+    }
+
+    // Collection Security Rules
+
+    // User Profile Rules
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUserProfile(incoming());
+      allow update: if isOwner(userId) 
+        && isValidUserProfile(incoming()) 
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'location', 'accessibilitySettings', 'email', 'uid'])
+        );
+      allow delete: if isOwner(userId);
+
+      // Medications subcollection
+      match /medications/{medicationId} {
+        allow get: if isOwner(userId) && isValidId(medicationId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(medicationId) && isValidMedication(incoming());
+        allow update: if isOwner(userId) && isValidId(medicationId) && isValidMedication(incoming())
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'dosage', 'frequency', 'time', 'instructions', 'lastTakenDate', 'lastNotificationDate'])
+          );
+        allow delete: if isOwner(userId) && isValidId(medicationId);
+      }
+
+      // Mood logs subcollection
+      match /moods/{moodId} {
+        allow get: if isOwner(userId) && isValidId(moodId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(moodId) && isValidMoodEntry(incoming());
+        allow update: if isOwner(userId) && isValidId(moodId) && isValidMoodEntry(incoming())
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly(['mood', 'date'])
+          );
+        allow delete: if isOwner(userId) && isValidId(moodId);
+      }
+
+      // Stored reports subcollection
+      match /reports/{reportId} {
+        allow get: if isOwner(userId) && isValidId(reportId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(reportId) && isValidStoredReport(incoming());
+        allow update: if isOwner(userId) && isValidId(reportId) && isValidStoredReport(incoming())
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly(['fileName', 'result', 'date'])
+          );
+        allow delete: if isOwner(userId) && isValidId(reportId);
+      }
+
+      // Vaccines subcollection
+      match /vaccines/{vaccineId} {
+        allow get: if isOwner(userId) && isValidId(vaccineId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(vaccineId) && isValidVaccine(incoming());
+        allow update: if isOwner(userId) && isValidId(vaccineId) && isValidVaccine(incoming())
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'dateGiven', 'nextDueDate', 'status', 'notes'])
+          );
+        allow delete: if isOwner(userId) && isValidId(vaccineId);
+      }
+
+      // Health History subcollection (usually a singleton document 'main')
+      match /healthHistory/{historyId} {
+        allow get: if isOwner(userId) && isValidId(historyId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(historyId) && isValidHealthHistory(incoming());
+        allow update: if isOwner(userId) && isValidId(historyId) && isValidHealthHistory(incoming())
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly(['conditions', 'surgeries', 'familyHistory', 'allergies', 'bloodType', 'organDonor', 'emergencyContacts', 'metrics'])
+          );
+        allow delete: if isOwner(userId) && isValidId(historyId);
+      }
+    }
+  }
+}

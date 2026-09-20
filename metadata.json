@@ -1,0 +1,11 @@
+{
+  "name": "Remix MediMind AI",
+  "description": "An AI-powered second opinion and accessibility tool helping patients understand medical reports in any language.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
