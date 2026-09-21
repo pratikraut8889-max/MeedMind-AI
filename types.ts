@@ -145,6 +145,7 @@ export interface StoredReport {
   date: number;
   fileName: string;
   result: AnalysisResult;
+  quickSummary?: string;
 }
 
 export interface MoodEntry {

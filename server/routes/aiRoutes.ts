@@ -555,3 +555,60 @@ aiRouter.post('/tts', chatLimiter, async (req: Request, res: Response): Promise<
     });
   }
 });
+
+/**
+ * 10. Quick High-Level Summary Paragraph Generation for Saved Reports
+ * POST /api/ai/quick-summary
+ */
+aiRouter.post('/quick-summary', chatLimiter, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { fileName, summary, redFlags = [], labMeasurements = [], language = 'English' } = req.body;
+
+    const redFlagText = Array.isArray(redFlags) && redFlags.length > 0
+      ? redFlags.map((f: any) => `${f.finding} (${f.severity}): ${f.action}`).join('; ')
+      : 'None detected';
+
+    const labText = Array.isArray(labMeasurements) && labMeasurements.length > 0
+      ? labMeasurements.slice(0, 5).map((l: any) => `${l.test}: ${l.value} ${l.unit} (${l.status})`).join('; ')
+      : 'No structured lab measurements provided';
+
+    const prompt = `You are a clinical document summarizer. Review the medical report findings below and generate an ultra-concise, high-level executive scan paragraph (exactly 2 to 3 sentences, 40 to 60 words).
+
+Report Document: ${fileName || 'Medical Analysis'}
+Target Language: ${language}
+Full Summary: ${summary || 'Not provided'}
+Red Flags: ${redFlagText}
+Key Lab Markers: ${labText}
+
+Guidelines:
+- Explain what the test was and its primary conclusion.
+- Note whether any red flags or abnormal markers were detected and their clinical significance.
+- State whether immediate medical follow-up or routine monitoring is indicated.
+- Write as a single, fluid, professional paragraph in ${language}. Do not include markdown headers or bullet points.`;
+
+    const ai = getGeminiClient();
+    const response = await ai.models.generateContent({
+      model: AI_MODELS.GENERAL,
+      contents: [{ parts: [{ text: prompt }] }],
+      config: {
+        systemInstruction: BASE_MEDICAL_SYSTEM_INSTRUCTION,
+        temperature: 0.2
+      }
+    });
+
+    const quickSummary = response.text?.trim() || '';
+
+    res.status(200).json({
+      success: true,
+      quickSummary: quickSummary || summary?.slice(0, 180) + '...'
+    });
+  } catch (error: any) {
+    console.error('[Quick Summary Error]', error?.message || error);
+    // Graceful fallback from summary if API has issues
+    const fallback = req.body.summary ? `${req.body.summary.slice(0, 180)}...` : 'Executive summary currently unavailable.';
+    res.status(200).json({
+      success: true,
+      quickSummary: fallback
+    });
+  }
+});

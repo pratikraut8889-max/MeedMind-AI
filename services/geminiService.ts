@@ -272,5 +272,44 @@ export const GeminiService = {
       utterance.pitch = 1.0;
       window.speechSynthesis.speak(utterance);
     }
+  },
+
+  /**
+   * Generates a quick high-level summary paragraph for a medical report
+   */
+  generateQuickSummary: async (
+    fileName: string,
+    summary: string,
+    redFlags: any[] = [],
+    labMeasurements: any[] = [],
+    language: string = 'English'
+  ): Promise<string> => {
+    try {
+      const res = await fetch('/api/ai/quick-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName, summary, redFlags, labMeasurements, language })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.quickSummary) {
+          return json.quickSummary;
+        }
+      }
+    } catch (e) {
+      console.warn('[GeminiService] Failed to generate AI quick summary, using heuristic fallback', e);
+    }
+
+    // High-quality clinical scan fallback
+    const flagCount = redFlags.length;
+    const abnormalLabs = (labMeasurements || []).filter((l: any) => l.status === 'critical' || l.status === 'attention');
+    const flagPart = flagCount > 0
+      ? `Report indicates ${flagCount} clinical red flag finding${flagCount > 1 ? 's' : ''} requiring timely physician consultation.`
+      : `No emergent red flags or critical abnormalities were detected.`;
+    const labPart = abnormalLabs.length > 0
+      ? `Biomarker attention noted in ${abnormalLabs.slice(0, 3).map((l: any) => l.test).join(', ')}.`
+      : `Extracted parameters align with standard clinical intervals.`;
+    const snippet = summary ? ` Key takeaway: ${summary.slice(0, 120).trim()}...` : '';
+    return `${flagPart} ${labPart}${snippet}`;
   }
 };
