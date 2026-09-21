@@ -1,5 +1,5 @@
 {
-  "name": "Remix MediMind AI",
+  "name": "MediMind AI",
   "description": "An AI-powered second opinion and accessibility tool helping patients understand medical reports in any language.",
   "requestFramePermissions": [
     "camera",

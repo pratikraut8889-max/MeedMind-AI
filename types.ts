@@ -9,7 +9,10 @@ export enum AppMode {
   ADD_MEDICATION = 'ADD_MEDICATION',
   VACCINE = 'VACCINE',
   HEALTH_HISTORY = 'HEALTH_HISTORY',
-  BODY_SCAN = 'BODY_SCAN'
+  BODY_SCAN = 'BODY_SCAN',
+  AI_CHAT = 'AI_CHAT',
+  SAVED_REPORTS = 'SAVED_REPORTS',
+  PRIVACY_POLICY = 'PRIVACY_POLICY'
 }
 
 export enum AccessibilityMode {
@@ -29,23 +32,65 @@ export interface AccessibilitySettings {
   dyslexicFont: boolean;
 }
 
+export type UrgencyLevel = 'information' | 'routine' | 'urgent' | 'emergency';
+
+export interface CitationSource {
+  title: string;
+  organization: string;
+  url: string;
+  accessDate: string;
+}
+
+export interface LabMeasurement {
+  test: string;
+  value: string | number;
+  unit: string;
+  referenceRangeMin?: number;
+  referenceRangeMax?: number;
+  referenceRangeText?: string;
+  status: 'normal' | 'attention' | 'critical';
+  notes?: string;
+}
+
 export interface AnalysisResult {
   summary: string;
   simpleExplanation: string;
   childExplanation: string; // For Teddy Bear mode
   estimatedCost: string; // Based on location
+  urgency?: UrgencyLevel;
   redFlags: Array<{
     finding: string;
     severity: 'HIGH' | 'MEDIUM' | 'LOW';
     action: string;
   }>;
+  labMeasurements?: LabMeasurement[];
   medicationInteractions: Array<{
     medication: string;
     interaction: string;
   }>;
   nextSteps: string[];
+  questionsForDoctor?: string[];
+  possibleExplanations?: string[];
+  sources?: CitationSource[];
+  disclaimer?: string;
+  emergencyActionRequired?: boolean;
   language: string;
   date?: number; // For history
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: number;
+  urgency?: UrgencyLevel;
+  redFlags?: string[];
+  possibleExplanations?: string[];
+  recommendedNextSteps?: string[];
+  questionsForDoctor?: string[];
+  sources?: CitationSource[];
+  disclaimer?: string;
+  emergencyActionRequired?: boolean;
 }
 
 export interface DoctorLetter {
@@ -55,6 +100,7 @@ export interface DoctorLetter {
   findings: string[];
   criticalNotes: string[];
   questionsForDoctor: string[];
+  disclaimer?: string;
 }
 
 export interface VisualSymptomResult {

@@ -10,6 +10,9 @@ import { EmergencyContacts } from './components/EmergencyContacts';
 import { HealthTrendsChart } from './components/HealthTrendsChart';
 import { MyMedications } from './components/MyMedications';
 import { PDFExportService } from './services/pdfExportService';
+import { AiHealthChat } from './components/AiHealthChat';
+import { SavedReportsView } from './components/SavedReportsView';
+import { PrivacyPolicyView } from './components/PrivacyPolicyView';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || ''; 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY || ''; 
@@ -604,6 +607,127 @@ const ResultView = ({
                     <h3 className={`text-lg font-bold mb-2 flex items-center gap-2 ${textColor}`}><i className="fas fa-coins text-green-500"></i> Estimated Cost</h3>
                     <p className={subTextColor}>{result.estimatedCost}</p>
                     <p className="text-xs opacity-50 mt-2">Estimates based on local averages. Actual costs may vary.</p>
+                </Card>
+            )}
+
+            {/* Structured Lab Measurements Table */}
+            {result.labMeasurements && result.labMeasurements.length > 0 && !isChildMode && (
+                <Card highContrast={highContrast} darkMode={darkMode}>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className={`text-lg font-bold flex items-center gap-2 ${textColor}`}>
+                            <i className="fas fa-microscope text-blue-500"></i> Laboratory Measurements
+                        </h3>
+                        <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 font-semibold">
+                            {result.labMeasurements.length} Biomarkers Extracted
+                        </span>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr className={`border-b ${darkMode ? 'border-slate-700 text-slate-400' : 'border-slate-200 text-slate-500'}`}>
+                                    <th className="py-2.5 px-3 font-semibold">Test / Biomarker</th>
+                                    <th className="py-2.5 px-3 font-semibold">Result</th>
+                                    <th className="py-2.5 px-3 font-semibold">Reference Range</th>
+                                    <th className="py-2.5 px-3 font-semibold">Status</th>
+                                    <th className="py-2.5 px-3 font-semibold">Interpretation</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                {result.labMeasurements.map((lab, i) => (
+                                    <tr key={i} className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors`}>
+                                        <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-slate-100">
+                                            {lab.test}
+                                        </td>
+                                        <td className="py-2.5 px-3 font-semibold text-blue-600 dark:text-blue-400">
+                                            {lab.value} <span className="text-[10px] text-slate-500 font-normal">{lab.unit}</span>
+                                        </td>
+                                        <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400">
+                                            {lab.referenceRangeText || 
+                                              (lab.referenceRangeMin !== undefined && lab.referenceRangeMax !== undefined 
+                                                ? `${lab.referenceRangeMin} - ${lab.referenceRangeMax} ${lab.unit}` 
+                                                : 'Standard')}
+                                        </td>
+                                        <td className="py-2.5 px-3">
+                                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                                lab.status === 'critical'
+                                                    ? 'bg-red-500 text-white animate-pulse'
+                                                    : lab.status === 'attention'
+                                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                                    : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                            }`}>
+                                                {lab.status}
+                                            </span>
+                                        </td>
+                                        <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300 max-w-xs">
+                                            {lab.notes || '—'}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            )}
+
+            {/* Questions to Ask Doctor */}
+            {result.questionsForDoctor && result.questionsForDoctor.length > 0 && !isChildMode && (
+                <Card highContrast={highContrast} darkMode={darkMode} className="!border-l-4 !border-l-blue-500">
+                    <h3 className={`text-lg font-bold mb-3 flex items-center gap-2 ${textColor}`}>
+                        <i className="fas fa-clipboard-question text-blue-500"></i> Empowered Questions for Your Doctor
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                        Take these questions to your next appointment or message your healthcare provider through your patient portal.
+                    </p>
+                    <div className="space-y-2">
+                        {result.questionsForDoctor.map((q, idx) => (
+                            <div key={idx} className={`p-3 rounded-xl flex items-start gap-3 border ${
+                                darkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-blue-50/50 border-blue-100'
+                            }`}>
+                                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                                    {idx + 1}
+                                </span>
+                                <p className={`text-xs sm:text-sm ${subTextColor} flex-1`}>{q}</p>
+                                <button
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(q);
+                                        alert("Copied question to clipboard!");
+                                    }}
+                                    className="text-slate-400 hover:text-blue-500 p-1 text-xs"
+                                    title="Copy question"
+                                >
+                                    <i className="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </Card>
+            )}
+
+            {/* Verified Clinical Sources / Citations */}
+            {result.sources && result.sources.length > 0 && !isChildMode && (
+                <Card highContrast={highContrast} darkMode={darkMode}>
+                    <h3 className={`text-sm font-bold mb-2 flex items-center gap-2 ${textColor}`}>
+                        <i className="fas fa-shield-halved text-emerald-500"></i> Verified Medical References & Grounding
+                    </h3>
+                    <div className="space-y-1.5 text-xs">
+                        {result.sources.map((src, idx) => (
+                            <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                                <div>
+                                    <span className="font-semibold text-slate-800 dark:text-slate-200">{src.organization}:</span>{' '}
+                                    <span className="text-slate-600 dark:text-slate-400">{src.title}</span>
+                                </div>
+                                <a
+                                    href={src.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-500 hover:underline shrink-0 text-xs ml-2 font-medium"
+                                >
+                                    Read Source <i className="fas fa-external-link-alt text-[10px] ml-0.5"></i>
+                                </a>
+                            </div>
+                        ))}
+                    </div>
                 </Card>
             )}
 
@@ -1655,103 +1779,258 @@ export default function App() {
         />
       )}
 
-      <nav className={`sticky top-0 z-40 backdrop-blur-md border-b ${isHighContrast ? 'bg-black/80 border-slate-800' : darkMode ? 'bg-slate-900/80 border-slate-700' : 'bg-white/80 border-slate-100'} px-6 py-4 flex justify-between items-center shrink-0`}>
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => {setMode(AppMode.DASHBOARD); setAnalysis(null);}}>
-            <i className={`fas fa-brain text-2xl ${isHighContrast ? 'text-yellow-400' : 'text-blue-600'}`}></i>
-            <span className={`font-bold text-xl ${textClass}`}>MediMind</span>
+      <nav className={`sticky top-0 z-40 backdrop-blur-md border-b ${isHighContrast ? 'bg-black/80 border-slate-800' : darkMode ? 'bg-slate-900/80 border-slate-700' : 'bg-white/80 border-slate-100'} px-4 sm:px-6 py-3 flex justify-between items-center shrink-0`}>
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => {setMode(AppMode.DASHBOARD); setAnalysis(null);}}>
+            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+                <i className="fas fa-brain text-lg"></i>
+            </div>
+            <div>
+                <span className={`font-bold text-lg tracking-tight ${textClass}`}>MediMind AI</span>
+                <span className="hidden sm:inline-block ml-2 text-[10px] px-1.5 py-0.5 rounded font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                    Pro Care
+                </span>
+            </div>
         </div>
-        <div className="flex gap-2">
-             <button onClick={() => setShowSettings(true)} className={`w-8 h-8 rounded-full flex items-center justify-center ${isHighContrast ? 'bg-yellow-900 text-yellow-300' : darkMode ? 'bg-slate-700 text-blue-400' : 'bg-slate-200 text-slate-600'}`}>
+
+        {/* Quick Nav Bar */}
+        <div className="hidden md:flex items-center gap-1 text-xs font-semibold">
+            <button
+                onClick={() => { setMode(AppMode.DASHBOARD); setAnalysis(null); }}
+                className={`px-3 py-1.5 rounded-lg transition-colors ${mode === AppMode.DASHBOARD ? 'bg-blue-50 text-blue-600 dark:bg-slate-800 dark:text-blue-400' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            >
+                Dashboard
+            </button>
+            <button
+                onClick={() => setMode(AppMode.AI_CHAT)}
+                className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${mode === AppMode.AI_CHAT ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            >
+                <i className="fas fa-comment-dots text-xs"></i> AI Assistant
+            </button>
+            <button
+                onClick={() => setMode(AppMode.SAVED_REPORTS)}
+                className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${mode === AppMode.SAVED_REPORTS ? 'bg-blue-50 text-blue-600 dark:bg-slate-800 dark:text-blue-400' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            >
+                <i className="fas fa-file-medical text-xs"></i> Reports & Trends
+            </button>
+            <button
+                onClick={() => setMode(AppMode.MY_MEDS)}
+                className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${mode === AppMode.MY_MEDS ? 'bg-blue-50 text-blue-600 dark:bg-slate-800 dark:text-blue-400' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            >
+                <i className="fas fa-pills text-xs"></i> Meds
+            </button>
+            <button
+                onClick={() => setMode(AppMode.HEALTH_HISTORY)}
+                className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${mode === AppMode.HEALTH_HISTORY ? 'bg-blue-50 text-blue-600 dark:bg-slate-800 dark:text-blue-400' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            >
+                <i className="fas fa-heart-pulse text-xs"></i> Vitals
+            </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+             <button
+                onClick={() => setMode(AppMode.PRIVACY_POLICY)}
+                className={`p-2 rounded-lg text-xs font-medium transition-colors ${darkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}
+                title="Privacy & Disclaimer"
+             >
+                <i className="fas fa-shield-alt"></i>
+             </button>
+             <button onClick={() => setShowSettings(true)} className={`w-8 h-8 rounded-lg flex items-center justify-center ${isHighContrast ? 'bg-yellow-900 text-yellow-300' : darkMode ? 'bg-slate-700 text-blue-400' : 'bg-slate-100 text-slate-600'}`}>
                 <i className="fas fa-cog text-xs"></i>
             </button>
-            <select value={language} onChange={e => setLanguage(e.target.value)} className={`text-xs bg-transparent border rounded ${darkMode ? 'text-white border-slate-600' : 'text-slate-800 border-slate-300'}`}>
+            <select value={language} onChange={e => setLanguage(e.target.value)} className={`text-xs bg-transparent border rounded-lg px-2 py-1 ${darkMode ? 'text-white border-slate-600 bg-slate-800' : 'text-slate-800 border-slate-200 bg-white'}`}>
                 {SUPPORTED_LANGUAGES.map(l => <option key={l} value={l} className="text-black">{l}</option>)}
             </select>
         </div>
       </nav>
 
-      <main className="max-w-2xl w-full mx-auto p-6 flex-1 overflow-hidden pb-24">
+      <main className="max-w-4xl w-full mx-auto p-4 sm:p-6 flex-1 overflow-hidden pb-24">
         {mode === AppMode.DASHBOARD && !analysis && (
             <div className="space-y-6 animate-fade-in">
-                <div className="grid grid-cols-2 gap-3">
-                    <button onClick={() => setMode(AppMode.EMERGENCY)} className={`p-4 rounded-2xl flex flex-col items-center gap-2 ${isHighContrast ? 'bg-red-900 text-yellow-300 border border-yellow-400' : darkMode ? 'bg-red-900/50 text-red-300 border border-red-800' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}>
-                        <i className="fas fa-heart-pulse text-2xl"></i><span className="font-bold text-sm">Emergency</span>
-                    </button>
-                    <button onClick={() => setMode(AppMode.VISUAL_SYMPTOM_CHECK)} className={`p-4 rounded-2xl flex flex-col items-center gap-2 ${isHighContrast ? 'bg-yellow-900 text-yellow-300 border border-yellow-400' : darkMode ? 'bg-indigo-900/50 text-indigo-300 border border-indigo-800' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>
-                        <i className="fas fa-camera text-2xl"></i><span className="font-bold text-sm">Symptom Cam</span>
-                    </button>
-                    <button onClick={() => setMode(AppMode.VACCINE)} className={`p-4 rounded-2xl flex flex-col items-center gap-2 ${isHighContrast ? 'bg-slate-900 border border-yellow-400' : darkMode ? 'bg-slate-800 shadow hover:bg-slate-700' : 'bg-white shadow hover:shadow-md'}`}>
-                        <i className="fas fa-syringe text-2xl text-green-500"></i><span className={`font-bold text-sm ${textClass}`}>Vaccines</span>
-                    </button>
-                    <button onClick={() => setMode(AppMode.MY_MEDS)} className={`p-4 rounded-2xl flex flex-col items-center gap-2 ${isHighContrast ? 'bg-slate-900 border border-yellow-400' : darkMode ? 'bg-slate-800 shadow hover:bg-slate-700' : 'bg-white shadow hover:shadow-md'}`}>
-                        <i className="fas fa-pills text-2xl text-blue-500"></i><span className="font-bold text-sm">Meds</span>
-                    </button>
-                    <button onClick={() => setMode(AppMode.BODY_SCAN)} className={`p-4 rounded-2xl flex flex-col items-center gap-2 ${isHighContrast ? 'bg-slate-900 border border-yellow-400' : darkMode ? 'bg-slate-800 shadow hover:bg-slate-700' : 'bg-white shadow hover:shadow-md'}`}>
-                        <i className="fas fa-user-md text-2xl text-purple-500"></i><span className="font-bold text-sm">Body Scan</span>
-                    </button>
-                    <button onClick={() => setMode(AppMode.HEALTH_HISTORY)} className={`p-4 rounded-2xl flex flex-col items-center gap-2 ${isHighContrast ? 'bg-slate-900 border border-yellow-400' : darkMode ? 'bg-slate-800 shadow hover:bg-slate-700' : 'bg-white shadow hover:shadow-md'}`}>
-                        <i className="fas fa-history text-2xl text-amber-500"></i><span className="font-bold text-sm">History</span>
+                {/* AI Health Assistant Spotlight Card */}
+                <div
+                    onClick={() => setMode(AppMode.AI_CHAT)}
+                    className="p-5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white shadow-lg shadow-blue-500/20 cursor-pointer hover:shadow-xl hover:scale-[1.01] transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                >
+                    <div className="flex items-center gap-3.5">
+                        <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-2xl shrink-0">
+                            <i className="fas fa-comments"></i>
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h3 className="font-bold text-base sm:text-lg">AI Health Assistant</h3>
+                                <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-semibold">Evidence Grounded</span>
+                            </div>
+                            <p className="text-xs text-blue-100 mt-0.5">
+                                Ask about lab numbers, drug interactions, or symptoms in {language}.
+                            </p>
+                        </div>
+                    </div>
+                    <button className="px-4 py-2 bg-white text-blue-600 font-bold rounded-xl text-xs hover:bg-blue-50 transition-colors shadow-sm shrink-0 self-end sm:self-auto">
+                        Open Assistant <i className="fas fa-arrow-right ml-1"></i>
                     </button>
                 </div>
 
-                <div className={`p-5 rounded-2xl transition-all ${isHighContrast ? 'bg-slate-900 border border-yellow-400' : darkMode ? 'bg-slate-800 border border-slate-700' : 'bg-white shadow-sm border border-slate-100'}`}>
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${darkMode ? 'bg-slate-700 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
-                            <i className="fas fa-location-dot text-sm"></i>
+                {/* Primary Capabilities Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    <button onClick={() => setMode(AppMode.EMERGENCY)} className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-2 text-center transition-transform active:scale-95 ${isHighContrast ? 'bg-red-900 text-yellow-300 border border-yellow-400' : darkMode ? 'bg-red-950/40 text-red-300 border border-red-900 hover:bg-red-900/60' : 'bg-red-50 text-red-700 border border-red-100 hover:bg-red-100/70'}`}>
+                        <i className="fas fa-heart-pulse text-2xl"></i>
+                        <span className="font-bold text-xs">Emergency Triage</span>
+                    </button>
+
+                    <button onClick={() => setMode(AppMode.VISUAL_SYMPTOM_CHECK)} className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-2 text-center transition-transform active:scale-95 ${isHighContrast ? 'bg-yellow-900 text-yellow-300 border border-yellow-400' : darkMode ? 'bg-indigo-950/40 text-indigo-300 border border-indigo-900 hover:bg-indigo-900/60' : 'bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100/70'}`}>
+                        <i className="fas fa-camera text-2xl"></i>
+                        <span className="font-bold text-xs">Symptom Cam</span>
+                    </button>
+
+                    <button onClick={() => setMode(AppMode.SAVED_REPORTS)} className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-2 text-center transition-transform active:scale-95 ${isHighContrast ? 'bg-slate-900 border border-yellow-400' : darkMode ? 'bg-slate-800/90 text-slate-100 border border-slate-700 hover:bg-slate-750' : 'bg-white text-slate-800 border border-slate-200 shadow-sm hover:shadow'}`}>
+                        <i className="fas fa-chart-line text-2xl text-blue-500"></i>
+                        <span className="font-bold text-xs">Reports & Trends</span>
+                    </button>
+
+                    <button onClick={() => setMode(AppMode.MY_MEDS)} className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-2 text-center transition-transform active:scale-95 ${isHighContrast ? 'bg-slate-900 border border-yellow-400' : darkMode ? 'bg-slate-800/90 text-slate-100 border border-slate-700 hover:bg-slate-750' : 'bg-white text-slate-800 border border-slate-200 shadow-sm hover:shadow'}`}>
+                        <i className="fas fa-pills text-2xl text-purple-500"></i>
+                        <span className="font-bold text-xs">Meds & Alarms</span>
+                    </button>
+
+                    <button onClick={() => setMode(AppMode.HEALTH_HISTORY)} className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-2 text-center transition-transform active:scale-95 ${isHighContrast ? 'bg-slate-900 border border-yellow-400' : darkMode ? 'bg-slate-800/90 text-slate-100 border border-slate-700 hover:bg-slate-750' : 'bg-white text-slate-800 border border-slate-200 shadow-sm hover:shadow'}`}>
+                        <i className="fas fa-history text-2xl text-amber-500"></i>
+                        <span className="font-bold text-xs">Vitals & History</span>
+                    </button>
+
+                    <button onClick={() => setMode(AppMode.VACCINE)} className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-2 text-center transition-transform active:scale-95 ${isHighContrast ? 'bg-slate-900 border border-yellow-400' : darkMode ? 'bg-slate-800/90 text-slate-100 border border-slate-700 hover:bg-slate-750' : 'bg-white text-slate-800 border border-slate-200 shadow-sm hover:shadow'}`}>
+                        <i className="fas fa-syringe text-2xl text-green-500"></i>
+                        <span className={`font-bold text-xs ${textClass}`}>Vaccine Card</span>
+                    </button>
+
+                    <button onClick={() => setMode(AppMode.BODY_SCAN)} className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-2 text-center transition-transform active:scale-95 ${isHighContrast ? 'bg-slate-900 border border-yellow-400' : darkMode ? 'bg-slate-800/90 text-slate-100 border border-slate-700 hover:bg-slate-750' : 'bg-white text-slate-800 border border-slate-200 shadow-sm hover:shadow'}`}>
+                        <i className="fas fa-user-md text-2xl text-indigo-500"></i>
+                        <span className="font-bold text-xs">AI Body Scan</span>
+                    </button>
+
+                    <button onClick={() => setMode(AppMode.PRIVACY_POLICY)} className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-2 text-center transition-transform active:scale-95 ${isHighContrast ? 'bg-slate-900 border border-yellow-400' : darkMode ? 'bg-slate-800/90 text-slate-100 border border-slate-700 hover:bg-slate-750' : 'bg-white text-slate-800 border border-slate-200 shadow-sm hover:shadow'}`}>
+                        <i className="fas fa-shield-alt text-2xl text-emerald-500"></i>
+                        <span className="font-bold text-xs">Privacy & Data</span>
+                    </button>
+                </div>
+
+                {/* Location Settings */}
+                <div className={`p-4 rounded-2xl transition-all ${isHighContrast ? 'bg-slate-900 border border-yellow-400' : darkMode ? 'bg-slate-800/80 border border-slate-700' : 'bg-white shadow-sm border border-slate-200'}`}>
+                    <div className="flex items-center gap-2.5 mb-2">
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${darkMode ? 'bg-slate-700 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                            <i className="fas fa-location-dot text-xs"></i>
                         </div>
-                        <label className={`text-xs font-bold uppercase tracking-wider ${isHighContrast ? 'text-yellow-500' : 'text-slate-400'}`}>Your Location</label>
+                        <label className={`text-xs font-bold uppercase tracking-wider ${isHighContrast ? 'text-yellow-500' : 'text-slate-400'}`}>Patient Location & Currency Context</label>
                     </div>
                     <input 
                         type="text" 
-                        placeholder="City, Country (e.g. London, UK)" 
+                        placeholder="City, Country (e.g. London, UK or New York, USA)" 
                         value={location} 
                         onChange={e => setLocation(e.target.value)} 
-                        className={`w-full bg-transparent border-b outline-none pb-2 transition-all ${textClass} ${isHighContrast ? 'border-yellow-600 focus:border-yellow-400' : darkMode ? 'border-slate-600 focus:border-blue-500 placeholder-slate-600' : 'border-slate-200 focus:border-blue-600'}`} 
+                        className={`w-full bg-transparent border-b outline-none pb-1.5 text-xs transition-all ${textClass} ${isHighContrast ? 'border-yellow-600 focus:border-yellow-400' : darkMode ? 'border-slate-600 focus:border-blue-500 placeholder-slate-600' : 'border-slate-200 focus:border-blue-600'}`} 
                     />
-                    <p className="text-[10px] opacity-40 mt-2 italic">Used to improve local cost estimates in your reports.</p>
+                    <p className="text-[10px] opacity-40 mt-1 italic">Tailors medical explanation terms and local procedural cost estimates.</p>
                 </div>
 
+                {/* File Upload for Report Analysis */}
                 <FileUpload onUpload={handleUpload} isProcessing={isProcessing} darkMode={darkMode} />
 
+                {/* Stored Reports Preview */}
                 {storedReports.length > 0 && (
                     <div className="mt-8">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className={`font-bold ${textClass}`}>Recent Reports</h3>
-                            <span className="text-xs opacity-50">{storedReports.length} reports saved</span>
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className={`font-bold text-sm ${textClass}`}>Recent Medical Reports</h3>
+                            <button
+                                onClick={() => setMode(AppMode.SAVED_REPORTS)}
+                                className="text-xs text-blue-500 hover:underline font-semibold"
+                            >
+                                View All ({storedReports.length}) & Trends →
+                            </button>
                         </div>
-                        <div className="space-y-3">
-                            {storedReports.map(r => (
+                        <div className="space-y-2.5">
+                            {storedReports.slice(0, 3).map(r => (
                                 <div 
                                     key={r.id} 
                                     onClick={() => loadReport(r)} 
-                                    className={`p-4 rounded-2xl flex flex-col gap-2 cursor-pointer transition-all active:scale-95 group
+                                    className={`p-3.5 rounded-xl flex items-center justify-between cursor-pointer transition-all active:scale-95 group
                                         ${isHighContrast 
                                             ? 'bg-slate-900 border border-yellow-600 hover:bg-slate-800' 
                                             : darkMode 
                                                 ? 'bg-slate-800 border border-slate-700 hover:bg-slate-700' 
-                                                : 'bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-100'}`}
+                                                : 'bg-white border border-slate-200 shadow-sm hover:shadow hover:border-blue-200'}`}
                                 >
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${darkMode ? 'bg-slate-700 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
-                                                <i className="fas fa-file-medical"></i>
-                                            </div>
-                                            <div>
-                                                <p className={`font-bold text-sm ${textClass}`}>{r.fileName}</p>
-                                                <p className="text-[10px] opacity-50">{new Date(r.date).toLocaleDateString()} • {new Date(r.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                                            </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${darkMode ? 'bg-slate-700 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                                            <i className="fas fa-file-medical"></i>
                                         </div>
-                                        <i className="fas fa-chevron-right text-slate-300 group-hover:text-blue-400 transition-colors"></i>
+                                        <div>
+                                            <p className={`font-bold text-xs ${textClass}`}>{r.fileName}</p>
+                                            <p className="text-[10px] opacity-50">{new Date(r.date).toLocaleDateString()} • {new Date(r.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                        </div>
                                     </div>
-                                    <p className={`text-xs line-clamp-2 opacity-70 leading-relaxed ${textClass}`}>
-                                        {r.result.summary}
-                                    </p>
+                                    <i className="fas fa-chevron-right text-xs text-slate-300 group-hover:text-blue-500 transition-colors"></i>
                                 </div>
                             ))}
                         </div>
                     </div>
                 )}
+
+                {/* Clinical Disclaimer Banner */}
+                <div className={`p-4 rounded-xl border text-[11px] flex items-start gap-2.5 ${
+                    darkMode ? 'bg-slate-800/40 border-slate-700 text-slate-400' : 'bg-slate-100/80 border-slate-200 text-slate-600'
+                }`}>
+                    <i className="fas fa-info-circle text-blue-500 mt-0.5 text-xs"></i>
+                    <div>
+                        <span>
+                            MediMind AI provides second-opinion document translation and health educational guidance. It is not an authorized medical diagnostic tool.
+                        </span>{' '}
+                        <button
+                            onClick={() => setMode(AppMode.PRIVACY_POLICY)}
+                            className="font-bold underline hover:text-blue-500"
+                        >
+                            Read full medical disclaimer and data privacy controls.
+                        </button>
+                    </div>
+                </div>
             </div>
+        )}
+
+        {mode === AppMode.AI_CHAT && (
+            <AiHealthChat
+                language={language}
+                darkMode={darkMode}
+                highContrast={isHighContrast}
+                onBack={() => setMode(AppMode.DASHBOARD)}
+            />
+        )}
+
+        {mode === AppMode.SAVED_REPORTS && (
+            <SavedReportsView
+                reports={storedReports}
+                onSelectReport={(r) => loadReport(r)}
+                onDeleteReport={(id) => setStoredReports(storedReports.filter(x => x.id !== id))}
+                onClearAll={() => setStoredReports([])}
+                onBack={() => setMode(AppMode.DASHBOARD)}
+                darkMode={darkMode}
+                highContrast={isHighContrast}
+            />
+        )}
+
+        {mode === AppMode.PRIVACY_POLICY && (
+            <PrivacyPolicyView
+                onBack={() => setMode(AppMode.DASHBOARD)}
+                onClearAllLocalData={() => {
+                    setStoredReports([]);
+                    setMedications([]);
+                    setMoodHistory([]);
+                    localStorage.removeItem('medimind_chat_history');
+                    localStorage.removeItem('medimind_health_history');
+                    localStorage.removeItem('medimind_reports');
+                    localStorage.removeItem('medimind_meds');
+                    localStorage.removeItem('medimind_moods');
+                }}
+                darkMode={darkMode}
+                highContrast={isHighContrast}
+            />
         )}
 
         {mode === AppMode.ANALYSIS && analysis && <ResultView result={analysis} highContrast={isHighContrast} darkMode={darkMode} onSpeak={() => GeminiService.speakText(analysis.summary, language)} onBack={() => {setMode(AppMode.DASHBOARD); setAnalysis(null);}} language={language} />}
