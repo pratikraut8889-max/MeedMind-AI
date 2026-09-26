@@ -39,6 +39,10 @@ export interface CitationSource {
   organization: string;
   url: string;
   accessDate: string;
+  documentIdentifier?: string;
+  publicationDate?: string;
+  excerpt?: string;
+  relevanceScore?: number;
 }
 
 export interface LabMeasurement {

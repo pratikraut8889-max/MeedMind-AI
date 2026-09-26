@@ -6,7 +6,7 @@ import { observabilityMiddleware } from './server/middleware/observability';
 import { healthRouter } from './server/routes/healthRoutes';
 import { aiRouter } from './server/routes/aiRoutes';
 
-const PORT = 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
 const app = express();
 
 // Security headers and CORS
@@ -46,7 +46,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*all', (req: Request, res: Response) => {
+    app.use((req: Request, res: Response) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

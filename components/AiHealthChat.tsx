@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChatMessage, SUPPORTED_LANGUAGES, UrgencyLevel } from '../types';
 import { GeminiService } from '../services/geminiService';
+import { MedicalCitationCard } from './MedicalCitationCard';
 
 interface AiHealthChatProps {
   language: string;
@@ -315,27 +316,21 @@ export const AiHealthChat: React.FC<AiHealthChatProps> = ({
                 </div>
               )}
 
-              {/* Trusted Source Citations */}
+              {/* Trusted Source Citations (Grounded Clinical RAG) */}
               {msg.sources && msg.sources.length > 0 && (
-                <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400">
-                  <p className="font-semibold mb-1 flex items-center gap-1">
-                    <i className="fas fa-book-medical"></i> Verified Medical Sources:
-                  </p>
-                  <div className="space-y-1">
+                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <i className="fas fa-book-medical text-blue-500"></i>
+                      Verified Medical Citations ({msg.sources.length})
+                    </p>
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                      Authoritative RAG Grounding
+                    </span>
+                  </div>
+                  <div className="space-y-2">
                     {msg.sources.map((src, idx) => (
-                      <div key={idx} className="flex items-center justify-between">
-                        <span className="truncate pr-2 font-medium">
-                          {src.organization} — {src.title}
-                        </span>
-                        <a
-                          href={src.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-500 hover:underline shrink-0 text-[10px]"
-                        >
-                          View <i className="fas fa-external-link-alt text-[9px]"></i>
-                        </a>
-                      </div>
+                      <MedicalCitationCard key={idx} citation={src} />
                     ))}
                   </div>
                 </div>

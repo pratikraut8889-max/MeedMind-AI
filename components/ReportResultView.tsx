@@ -3,6 +3,7 @@ import { AnalysisResult, DoctorLetter, LabMeasurement } from '../types';
 import { GeminiService } from '../services/geminiService';
 import { PDFExportService } from '../services/pdfExportService';
 import { Button, Card, Badge, Toast, PageHeader } from './SharedComponents';
+import { MedicalCitationCard } from './MedicalCitationCard';
 
 interface ReportResultViewProps {
   result: AnalysisResult;
@@ -515,36 +516,18 @@ export const ReportResultView: React.FC<ReportResultViewProps> = ({
       {/* Verified Clinical Sources / Citations */}
       {result.sources && result.sources.length > 0 && (
         <Card darkMode={darkMode} highContrast={highContrast}>
-          <h2 className="text-sm font-bold mb-3 flex items-center gap-2">
-            <i className="fas fa-building-columns text-emerald-600"></i>
-            <span>Verified Medical References & Grounding</span>
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-bold flex items-center gap-2">
+              <i className="fas fa-building-columns text-emerald-600"></i>
+              <span>Verified Medical References & Grounding ({result.sources.length})</span>
+            </h2>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+              Grounded Authoritative Citations
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {result.sources.map((src, idx) => (
-              <div
-                key={idx}
-                className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 text-xs flex items-center justify-between"
-              >
-                <div className="min-w-0 pr-2">
-                  <span className="font-bold text-slate-800 dark:text-slate-200 block truncate">
-                    {src.organization}
-                  </span>
-                  <span className="text-slate-500 dark:text-slate-400 block truncate text-[11px]">
-                    {src.title}
-                  </span>
-                </div>
-                {src.url && (
-                  <a
-                    href={src.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-700 font-semibold shrink-0 text-xs flex items-center gap-1"
-                  >
-                    <span>View</span>
-                    <i className="fas fa-arrow-up-right-from-square text-[10px]"></i>
-                  </a>
-                )}
-              </div>
+              <MedicalCitationCard key={idx} citation={src} />
             ))}
           </div>
         </Card>

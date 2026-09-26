@@ -44,6 +44,9 @@ import { EmergencyModeView } from './components/EmergencyModeView';
 import { SymptomCheckView } from './components/SymptomCheckView';
 import { SettingsModal } from './components/SettingsModal';
 import { WellnessCheckinModal } from './components/WellnessCheckinModal';
+import { ToastProvider, useToast } from './components/ToastContext';
+import { DashboardQuickActions } from './components/DashboardQuickActions';
+import { MonthlyHealthTrendsCard } from './components/MonthlyHealthTrendsCard';
 
 // --- Subview: Doctor Letter Document Preview ---
 const DoctorLetterView = ({
@@ -977,7 +980,8 @@ const AddMedication = ({
 // Main MediMind Production Application Root
 // ==========================================
 
-export default function App() {
+function MediMindAppContent() {
+  const toast = useToast();
   const [mode, setMode] = useState<AppMode>(AppMode.DASHBOARD);
   const [accessMode, setAccessMode] = useState<AccessibilityMode>(AccessibilityMode.STANDARD);
   const [fontSize, setFontSize] = useState<FontSize>(() => (localStorage.getItem('medimind_font_size') as FontSize) || FontSize.MEDIUM);
@@ -1055,23 +1059,30 @@ export default function App() {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = async () => {
-        const base64 = (reader.result as string).split(',')[1];
-        const res = await GeminiService.analyzeReport(base64, file.type, language, '', location);
-        setAnalysis(res);
-        setMode(AppMode.ANALYSIS);
-        // Cache report
-        const newReport: StoredReport = {
-          id: Date.now().toString(),
-          date: Date.now(),
-          fileName: file.name,
-          result: res
-        };
-        setStoredReports((prev) => [newReport, ...prev].slice(0, 50));
-        setIsProcessing(false);
+        try {
+          const base64 = (reader.result as string).split(',')[1];
+          const res = await GeminiService.analyzeReport(base64, file.type, language, '', location);
+          setAnalysis(res);
+          setMode(AppMode.ANALYSIS);
+          // Cache report
+          const newReport: StoredReport = {
+            id: Date.now().toString(),
+            date: Date.now(),
+            fileName: file.name,
+            result: res
+          };
+          setStoredReports((prev) => [newReport, ...prev].slice(0, 50));
+          setIsProcessing(false);
+          toast.success('Medical report analyzed and saved to your history.');
+        } catch (err: any) {
+          console.error(err);
+          toast.error(err.message || 'Error analyzing document. Please verify file clarity.');
+          setIsProcessing(false);
+        }
       };
     } catch (e) {
       console.error(e);
-      alert('Error analyzing report. Please ensure the file is a clear clinical document.');
+      toast.error('Error reading report file.');
       setIsProcessing(false);
     }
   };
@@ -1089,11 +1100,13 @@ export default function App() {
       mood: moodMap[entry.score] || 'good'
     };
     setMoodHistory((prev) => [newMood, ...prev]);
+    toast.success('Daily wellness check-in logged successfully.');
   };
 
   const loadReport = (r: StoredReport) => {
     setAnalysis(r.result);
     setMode(AppMode.ANALYSIS);
+    toast.info(`Viewing ${r.fileName}`);
   };
 
   // Font size scale class
@@ -1161,11 +1174,20 @@ export default function App() {
         darkMode={darkMode}
         highContrast={isHighContrast}
         onOpenSettings={() => setShowSettings(true)}
+        savedReportsCount={storedReports.length}
+        activeMedsCount={medications.length}
+        language={language}
+        onLanguageChange={setLanguage}
         userEmail={user?.email}
+        onSignOut={() => {
+          FirebaseService.logout();
+          toast.info('Signed out of session');
+        }}
+        onSignIn={() => setMode(AppMode.DASHBOARD)}
       />
 
       {/* Main Content Viewport */}
-      <div className="flex-1 flex flex-col min-w-0 pb-20 lg:pb-6">
+      <div className="flex-1 flex flex-col min-w-0 pb-28 lg:pb-8">
         {/* Top Patient Bar / Status Header */}
         <header
           className={`sticky top-0 z-30 px-4 sm:px-8 py-3.5 border-b backdrop-blur-md flex items-center justify-between gap-4 ${
@@ -1364,6 +1386,17 @@ export default function App() {
                 />
               </div>
 
+              {/* Monthly Health Trends & Red Flag Distribution */}
+              <MonthlyHealthTrendsCard
+                storedReports={storedReports}
+                darkMode={darkMode}
+                onViewAllReports={() => setMode(AppMode.SAVED_REPORTS)}
+                onUploadNew={() => {
+                  setAnalysis(null);
+                  setMode(AppMode.ANALYSIS);
+                }}
+              />
+
               {/* Primary Clinical Capabilities Grid */}
               <div className="space-y-3">
                 <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400">
@@ -1509,6 +1542,17 @@ export default function App() {
                 tone="info"
                 title="Clinical Second Opinion Notice"
                 message="MediMind AI translates diagnostic laboratory data into accessible patient guidance. It is not an authorized diagnostic physician. Always confirm findings with your primary healthcare provider."
+              />
+
+              {/* Floating Quick Action Group */}
+              <DashboardQuickActions
+                onUploadReport={() => {
+                  setAnalysis(null);
+                  setMode(AppMode.ANALYSIS);
+                }}
+                onAskAssistant={() => setMode(AppMode.AI_CHAT)}
+                onWellnessCheckin={() => setShowWellnessModal(true)}
+                darkMode={darkMode}
               />
             </div>
           )}
@@ -1724,5 +1768,13 @@ export default function App() {
         </main>
       </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <MediMindAppContent />
+    </ToastProvider>
   );
 }

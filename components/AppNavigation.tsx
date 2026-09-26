@@ -383,62 +383,107 @@ export const AppNavigation: React.FC<AppNavigationProps> = ({
 
       {/* ================= MOBILE BOTTOM TAB BAR ================= */}
       <nav
-        className={`lg:hidden fixed bottom-0 inset-x-0 z-40 border-t flex items-center justify-around py-2 px-1 backdrop-blur-md transition-colors ${
+        aria-label="Mobile Navigation"
+        className={`lg:hidden fixed bottom-0 inset-x-0 z-40 border-t flex items-center justify-around px-2 py-1.5 backdrop-blur-lg shadow-2xl transition-colors ${
           highContrast
             ? 'bg-slate-950 border-yellow-400 text-yellow-300'
             : darkMode
             ? 'bg-slate-900/95 border-slate-800 text-slate-300'
             : 'bg-white/95 border-slate-200 text-slate-600'
         }`}
+        style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
       >
+        {/* Tab 1: Overview (Dashboard) */}
         <button
+          type="button"
           onClick={() => onNavigate(AppMode.DASHBOARD)}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-[10px] font-semibold transition-colors ${
-            currentMode === AppMode.DASHBOARD ? 'text-blue-600 font-bold' : ''
+          className={`flex-1 min-w-[48px] min-h-[48px] flex flex-col items-center justify-center gap-1 rounded-xl transition-all active:scale-95 ${
+            currentMode === AppMode.DASHBOARD
+              ? 'text-blue-600 dark:text-blue-400 font-bold'
+              : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
           }`}
+          aria-label="Overview Dashboard"
         >
-          <i className="fas fa-chart-pie text-base"></i>
-          <span>Overview</span>
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-colors ${
+            currentMode === AppMode.DASHBOARD ? 'bg-blue-50 dark:bg-blue-950/60' : ''
+          }`}>
+            <i className="fas fa-chart-pie"></i>
+          </div>
+          <span className="text-[10px] leading-none tracking-tight">Overview</span>
         </button>
 
+        {/* Tab 2: Assistant (AI Health Chat) */}
         <button
+          type="button"
           onClick={() => onNavigate(AppMode.AI_CHAT)}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-[10px] font-semibold transition-colors ${
-            currentMode === AppMode.AI_CHAT ? 'text-blue-600 font-bold' : ''
+          className={`flex-1 min-w-[48px] min-h-[48px] flex flex-col items-center justify-center gap-1 rounded-xl transition-all active:scale-95 ${
+            currentMode === AppMode.AI_CHAT
+              ? 'text-blue-600 dark:text-blue-400 font-bold'
+              : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
           }`}
+          aria-label="AI Health Assistant"
         >
-          <i className="fas fa-comment-medical text-base"></i>
-          <span>Assistant</span>
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-colors ${
+            currentMode === AppMode.AI_CHAT ? 'bg-blue-50 dark:bg-blue-950/60' : ''
+          }`}>
+            <i className="fas fa-comment-medical"></i>
+          </div>
+          <span className="text-[10px] leading-none tracking-tight">Assistant</span>
         </button>
 
+        {/* Tab 3: Analyze (Upload / Scan) - Elevated Floating Button */}
         <button
+          type="button"
           onClick={() => onNavigate(AppMode.ANALYSIS)}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-[10px] font-semibold transition-colors ${
-            currentMode === AppMode.ANALYSIS ? 'text-blue-600 font-bold' : ''
-          }`}
+          className="flex-1 min-w-[48px] min-h-[48px] flex flex-col items-center justify-center -mt-4 transition-transform active:scale-95"
+          aria-label="Analyze Document"
         >
-          <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm shadow-sm -mt-2">
+          <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center text-base shadow-lg shadow-blue-500/30 ring-4 ring-white dark:ring-slate-900">
             <i className="fas fa-plus"></i>
           </div>
-          <span>Analyze</span>
+          <span className={`text-[10px] font-bold mt-1 leading-none tracking-tight ${
+            currentMode === AppMode.ANALYSIS ? 'text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'
+          }`}>
+            Analyze
+          </span>
         </button>
 
+        {/* Tab 4: Meds (Prescriptions & Reminders) */}
         <button
+          type="button"
           onClick={() => onNavigate(AppMode.MY_MEDS)}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-[10px] font-semibold transition-colors ${
-            currentMode === AppMode.MY_MEDS ? 'text-blue-600 font-bold' : ''
+          className={`flex-1 min-w-[48px] min-h-[48px] flex flex-col items-center justify-center gap-1 rounded-xl relative transition-all active:scale-95 ${
+            currentMode === AppMode.MY_MEDS
+              ? 'text-blue-600 dark:text-blue-400 font-bold'
+              : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
           }`}
+          aria-label="Medication Reminders"
         >
-          <i className="fas fa-pills text-base"></i>
-          <span>Meds</span>
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm relative transition-colors ${
+            currentMode === AppMode.MY_MEDS ? 'bg-blue-50 dark:bg-blue-950/60' : ''
+          }`}>
+            <i className="fas fa-pills"></i>
+            {activeMedsCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center">
+                {activeMedsCount > 9 ? '9+' : activeMedsCount}
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] leading-none tracking-tight">Meds</span>
         </button>
 
+        {/* Tab 5: More (Drawer with Emergency, Reports, Vitals, Settings) */}
         <button
+          type="button"
           onClick={() => setMobileMenuOpen(true)}
-          className="flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-[10px] font-semibold text-slate-500"
+          className="flex-1 min-w-[48px] min-h-[48px] flex flex-col items-center justify-center gap-1 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all active:scale-95"
+          aria-label="Open More Menu"
+          aria-expanded={mobileMenuOpen}
         >
-          <i className="fas fa-bars text-base"></i>
-          <span>More</span>
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center text-sm">
+            <i className="fas fa-bars"></i>
+          </div>
+          <span className="text-[10px] leading-none tracking-tight">More</span>
         </button>
       </nav>
     </>
