@@ -12,7 +12,8 @@ export enum AppMode {
   BODY_SCAN = 'BODY_SCAN',
   AI_CHAT = 'AI_CHAT',
   SAVED_REPORTS = 'SAVED_REPORTS',
-  PRIVACY_POLICY = 'PRIVACY_POLICY'
+  PRIVACY_POLICY = 'PRIVACY_POLICY',
+  SYMPTOM_JOURNAL = 'SYMPTOM_JOURNAL'
 }
 
 export enum AccessibilityMode {
@@ -117,6 +118,15 @@ export interface VisualSymptomResult {
   childExplanation: string; // Added for Teddy Bear mode
 }
 
+export interface PillVerificationResult {
+  shape: string;
+  color: string;
+  imprint?: string;
+  description: string;
+  likelyMedication?: string;
+  safetyNotes?: string;
+}
+
 export interface Medication {
   id: string;
   name: string;
@@ -126,6 +136,11 @@ export interface Medication {
   instructions: string;
   lastTakenDate: string | null; // YYYY-MM-DD
   lastNotificationDate: string | null; // YYYY-MM-DD used to prevent double notifications
+  pillPhoto?: string | null; // Photo data URL of physical pill for visual verification
+  pillAppearance?: string | null; // e.g. "White oval scored tablet with imprint M367"
+  pillColor?: string | null;
+  pillShape?: string | null;
+  pillImprint?: string | null;
 }
 
 export interface MedicationAnalysisResult {
@@ -205,3 +220,17 @@ export const SUPPORTED_LANGUAGES = [
   "Turkish", "Vietnamese", "Polish", "Ukrainian", "Dutch", "Thai", 
   "Greek", "Hebrew", "Indonesian", "Malay", "Bengali", "Filipino"
 ];
+
+export interface SymptomEntry {
+  id: string;
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:MM
+  symptom: string; // e.g., "Migraine / Severe Headache"
+  severity: number; // 1-10 numerical scale
+  duration: string; // e.g., "< 1 hour", "2-4 hours", "All day", "Persistent"
+  bodyPart?: string; // e.g., "Head / Neurological", "Chest / Cardiac", "Abdomen", etc.
+  triggers?: string; // e.g., "Stress, lack of sleep"
+  notes?: string; // e.g., "Relieved slightly after dark room and hydration"
+  createdAt?: number;
+}
+

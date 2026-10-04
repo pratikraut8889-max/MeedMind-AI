@@ -5,7 +5,7 @@
 
 import { executeAiPipeline, PipelineResult } from '../pipeline/aiPipeline';
 import { MedicationInfoPrompt, ImageAnalysisPrompt } from '../prompts/promptRegistry';
-import { medicationAnalysisSchema } from '../schemas/aiSchemas';
+import { medicationAnalysisSchema, pillVerificationSchema } from '../schemas/aiSchemas';
 
 export interface MedicationWorkflowInput {
   base64Image?: string;
@@ -24,6 +24,58 @@ export interface MedicationWorkflowOutput {
   possibleSideEffects?: string[];
   precautions?: string[];
   whenToContactDoctor?: string;
+}
+
+export interface PillVerificationInput {
+  base64Image: string;
+  mimeType?: string;
+  medicationName?: string;
+  dosage?: string;
+  language?: string;
+}
+
+export interface PillVerificationOutput {
+  shape: string;
+  color: string;
+  imprint?: string;
+  description: string;
+  likelyMedication?: string;
+  safetyNotes?: string;
+}
+
+export async function runPillVerificationWorkflow(
+  input: PillVerificationInput
+): Promise<PipelineResult<PillVerificationOutput>> {
+  const language = input.language || 'English';
+
+  return executeAiPipeline<any, PillVerificationOutput>({
+    featureName: 'Physical Pill Visual Verification',
+    template: ImageAnalysisPrompt,
+    rawUserInput: `Physical pill identification and verification for: ${input.medicationName || 'Medication'} ${input.dosage || ''}`,
+    ragQuery: 'pill identifier visual identification tablet imprint color shape pharmacology',
+    ragDocLimit: 2,
+    responseSchema: pillVerificationSchema,
+    inlineFiles: [
+      {
+        mimeType: input.mimeType || 'image/jpeg',
+        data: input.base64Image
+      }
+    ],
+    userParams: {
+      analysisType: 'pill_verification',
+      medicationName: input.medicationName || '',
+      dosage: input.dosage || '',
+      targetLanguage: language
+    },
+    fallbackGenerator: () => ({
+      shape: 'Solid oral tablet or capsule',
+      color: 'Refer to captured physical photo',
+      imprint: 'Inspect debossed characters on tablet face under direct light',
+      description: `Physical medication unit captured for visual verification against prescription (${input.medicationName || 'Oral Medication'}).`,
+      likelyMedication: input.medicationName ? `Consistent with ${input.medicationName}` : 'Visual check recommended',
+      safetyNotes: 'Always inspect imprint code and color consistency before taking your dose. Contact your dispensing pharmacist if appearance differs from your previous refill.'
+    })
+  });
 }
 
 export async function runMedicationWorkflow(

@@ -166,3 +166,20 @@ export const medicationAnalysisSchema: Schema = {
   },
   required: ['name', 'dosage', 'frequency', 'instructions']
 };
+
+/**
+ * Physical Pill Visual Verification Schema.
+ */
+export const pillVerificationSchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    shape: { type: Type.STRING, description: 'Geometric shape of the physical pill (e.g., Round, Oval, Oblong, Capsule, Triangle).' },
+    color: { type: Type.STRING, description: 'Color or color combination of the pill (e.g., White, Blue, Yellow, Pink/White).' },
+    imprint: { type: Type.STRING, description: 'Visible alphanumeric markings, symbols, debossing, or scoring line.' },
+    description: { type: Type.STRING, description: 'Objective physical description of the tablet, capsule, or caplet.' },
+    likelyMedication: { type: Type.STRING, description: 'Identified candidate drug name or visual confirmation notes.' },
+    safetyNotes: { type: Type.STRING, description: 'Clinical verification reminder or cautionary guidance.' }
+  },
+  required: ['shape', 'color', 'description']
+};
+

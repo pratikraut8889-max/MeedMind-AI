@@ -4,6 +4,7 @@ interface DashboardQuickActionsProps {
   onUploadReport: () => void;
   onAskAssistant: () => void;
   onWellnessCheckin: () => void;
+  onLogSymptom?: () => void;
   darkMode?: boolean;
 }
 
@@ -11,6 +12,7 @@ export const DashboardQuickActions: React.FC<DashboardQuickActionsProps> = ({
   onUploadReport,
   onAskAssistant,
   onWellnessCheckin,
+  onLogSymptom,
   darkMode = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -107,6 +109,27 @@ export const DashboardQuickActions: React.FC<DashboardQuickActionsProps> = ({
               <i className="fas fa-heart-pulse"></i>
             </div>
           </button>
+
+          {/* Action 4: Record Symptom */}
+          {onLogSymptom && (
+            <button
+              type="button"
+              id="quick-action-symptom"
+              onClick={() => {
+                setIsOpen(false);
+                onLogSymptom();
+              }}
+              className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 shadow-xl hover:border-teal-500 dark:hover:border-teal-400 hover:shadow-2xl transition-all group active:scale-95"
+              aria-label="Record Symptom Journal"
+            >
+              <span className="text-xs sm:text-sm font-semibold whitespace-nowrap">
+                Record Symptom
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-teal-50 dark:bg-teal-950 text-teal-600 dark:text-teal-400 flex items-center justify-center text-sm group-hover:scale-110 transition-transform shrink-0">
+                <i className="fas fa-book-medical"></i>
+              </div>
+            </button>
+          )}
         </div>
       )}
 

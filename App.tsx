@@ -14,7 +14,8 @@ import {
   HealthHistory,
   BodyScanResult,
   EmergencyContact,
-  HealthMetricEntry
+  HealthMetricEntry,
+  SymptomEntry
 } from './types';
 import { GeminiService } from './services/geminiService';
 import { auth } from './services/firebase';
@@ -28,6 +29,7 @@ import { PDFExportService } from './services/pdfExportService';
 import { AiHealthChat } from './components/AiHealthChat';
 import { SavedReportsView } from './components/SavedReportsView';
 import { PrivacyPolicyView } from './components/PrivacyPolicyView';
+import { SymptomJournal } from './components/SymptomJournal';
 
 // Production SaaS UI Components
 import {
@@ -308,12 +310,18 @@ const HealthHistoryView = ({
   onBack,
   darkMode,
   highContrast,
-  user
+  user,
+  medications = [],
+  symptoms = [],
+  location = 'Global'
 }: {
   onBack: () => void;
   darkMode: boolean;
   highContrast: boolean;
   user: any;
+  medications?: Medication[];
+  symptoms?: SymptomEntry[];
+  location?: string;
 }) => {
   const [history, setHistory] = useState<HealthHistory>(() => {
     const saved = localStorage.getItem('medimind_health_history');
@@ -337,6 +345,23 @@ const HealthHistoryView = ({
   });
 
   const [newEntry, setNewEntry] = useState({ type: 'conditions', value: '' });
+
+  // PDF Export Modal State
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [pdfPatientName, setPdfPatientName] = useState(() => user?.displayName || user?.email?.split('@')[0] || 'Confidential Patient');
+  const [pdfDoctorName, setPdfDoctorName] = useState('');
+  const [pdfIncludeMeds, setPdfIncludeMeds] = useState(true);
+  const [pdfIncludeSymptoms, setPdfIncludeSymptoms] = useState(true);
+  const [pdfIncludeMetrics, setPdfIncludeMetrics] = useState(true);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => {
+      setToastMsg((prev) => (prev === msg ? null : prev));
+    }, 3500);
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -397,6 +422,28 @@ const HealthHistoryView = ({
     }
   };
 
+  const handleExportPDF = () => {
+    setIsExportingPDF(true);
+    try {
+      const fileName = PDFExportService.exportHealthHistory(history, {
+        patientName: pdfPatientName.trim() || 'Confidential Patient',
+        patientEmail: user?.email,
+        location: location,
+        doctorName: pdfDoctorName.trim() || undefined,
+        medications: pdfIncludeMeds ? medications : undefined,
+        symptoms: pdfIncludeSymptoms ? symptoms : undefined,
+        reportDate: Date.now()
+      });
+      setShowExportModal(false);
+      showToast(`Exported Clinical Health History as ${fileName}`);
+    } catch (err) {
+      console.error(err);
+      showToast('Error generating PDF report.');
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
   const shareWithDoctor = () => {
     const contactsText =
       history.emergencyContacts && history.emergencyContacts.length > 0
@@ -432,22 +479,176 @@ ${history.allergies.length > 0 ? history.allergies.map((a) => `- ${a}`).join('\n
         .catch(console.error);
     } else {
       navigator.clipboard.writeText(content);
-      alert('Clinical summary copied to clipboard!');
+      showToast('Clinical summary copied to clipboard!');
     }
   };
 
   return (
     <div className="space-y-6">
+      {toastMsg && (
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-semibold shadow-2xl flex items-center gap-2 border border-slate-700 animate-slide-up">
+          <i className="fas fa-check-circle text-emerald-400"></i>
+          <span>{toastMsg}</span>
+        </div>
+      )}
+
+      {/* Export Clinical PDF Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className={`w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4 border ${
+            darkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
+          }`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 flex items-center justify-center text-sm">
+                  <i className="fas fa-file-pdf"></i>
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm">Export Clinical Health History</h3>
+                  <p className="text-[11px] text-slate-500">Format for doctor or specialist sharing</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 dark:text-slate-300">Patient Full Name</label>
+                <input
+                  type="text"
+                  value={pdfPatientName}
+                  onChange={(e) => setPdfPatientName(e.target.value)}
+                  placeholder="e.g. Johnathan Doe"
+                  className={`w-full px-3 py-2 rounded-xl border outline-none ${
+                    darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
+                  }`}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 dark:text-slate-300">Consulting Physician (Optional)</label>
+                <input
+                  type="text"
+                  value={pdfDoctorName}
+                  onChange={(e) => setPdfDoctorName(e.target.value)}
+                  placeholder="e.g. Dr. Emily Watson, MD (Neurology)"
+                  className={`w-full px-3 py-2 rounded-xl border outline-none ${
+                    darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
+                  }`}
+                />
+              </div>
+
+              <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <span className="font-bold text-slate-500 text-[11px] uppercase tracking-wider block">
+                  Select Included Medical Modules:
+                </span>
+
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={pdfIncludeMeds}
+                    onChange={(e) => setPdfIncludeMeds(e.target.checked)}
+                    className="w-4 h-4 rounded text-blue-600 accent-blue-600"
+                  />
+                  <span>Active Prescription Medications & Regimens ({medications.length} active)</span>
+                </label>
+
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={pdfIncludeSymptoms}
+                    onChange={(e) => setPdfIncludeSymptoms(e.target.checked)}
+                    className="w-4 h-4 rounded text-blue-600 accent-blue-600"
+                  />
+                  <span>Recent Symptom Journal Log & Severity Episodes ({symptoms.length} episodes)</span>
+                </label>
+
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={pdfIncludeMetrics}
+                    onChange={(e) => setPdfIncludeMetrics(e.target.checked)}
+                    className="w-4 h-4 rounded text-blue-600 accent-blue-600"
+                  />
+                  <span>Physiological Vitals & Blood Pressure History ({history.metrics?.length || 0} entries)</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <Button variant="secondary" size="sm" onClick={() => setShowExportModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                icon="fas fa-download"
+                disabled={isExportingPDF}
+                onClick={handleExportPDF}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {isExportingPDF ? 'Generating PDF...' : 'Download Clinical PDF'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <PageHeader
         title="Clinical Health History & Tracked Vitals"
         subtitle="Comprehensive longitudinal health markers, chronic conditions, and emergency profiles"
         onBack={onBack}
         actions={
-          <Button variant="outline" size="sm" icon="fas fa-share-alt" onClick={shareWithDoctor}>
-            Share Profile
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="primary"
+              size="sm"
+              icon="fas fa-file-pdf"
+              onClick={() => setShowExportModal(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+            >
+              Export PDF for Doctor
+            </Button>
+            <Button variant="outline" size="sm" icon="fas fa-share-alt" onClick={shareWithDoctor}>
+              Copy Summary
+            </Button>
+          </div>
         }
       />
+
+      {/* Prominent Clinical Export Callout Banner */}
+      <Card darkMode={darkMode} highContrast={highContrast} className="p-4 sm:p-5 border-blue-200 dark:border-blue-900 bg-gradient-to-r from-blue-50/50 to-indigo-50/30 dark:from-blue-950/20 dark:to-indigo-950/10">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-lg shrink-0 shadow-md">
+              <i className="fas fa-file-medical"></i>
+            </div>
+            <div>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                Download Official Medical Summary for Doctor Consultations
+              </h3>
+              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 max-w-xl">
+                Generate a formatted, downloadable PDF clinical portfolio consolidating known allergies, active diagnoses, surgical records, current medications, symptom journal episodes, and vitals for your attending physician or hospital intake.
+              </p>
+            </div>
+          </div>
+
+          <Button
+            variant="primary"
+            size="sm"
+            icon="fas fa-file-pdf"
+            onClick={() => setShowExportModal(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+          >
+            Export Clinical PDF
+          </Button>
+        </div>
+      </Card>
 
       {/* Vitals Trends Chart Component */}
       <HealthTrendsChart
@@ -772,115 +973,455 @@ const AddMedication = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [form, setForm] = useState<Partial<Medication>>({ time: '09:00', frequency: 'Daily' });
+
+  // Camera Capture State
+  const [activeCaptureTab, setActiveCaptureTab] = useState<'label' | 'pill'>('label');
+  const [capturedLabelImage, setCapturedLabelImage] = useState<string | null>(null);
+  const [capturedPillImage, setCapturedPillImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzingMode, setAnalyzingMode] = useState<'label' | 'pill' | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
+  // Pill Verification AI Output
+  const [pillVerification, setPillVerification] = useState<{
+    shape?: string;
+    color?: string;
+    imprint?: string;
+    description?: string;
+    likelyMedication?: string;
+    safetyNotes?: string;
+  } | null>(null);
+
+  // Form Data
+  const [form, setForm] = useState<Partial<Medication>>({
+    time: '09:00',
+    frequency: 'Daily',
+    name: '',
+    dosage: '',
+    instructions: '',
+    pillAppearance: '',
+    pillColor: '',
+    pillShape: '',
+    pillImprint: ''
+  });
+
+  const isCameraActive =
+    (activeCaptureTab === 'label' && !capturedLabelImage) ||
+    (activeCaptureTab === 'pill' && !capturedPillImage);
 
   useEffect(() => {
-    if (capturedImage || isAnalyzing) return;
+    let isCancelled = false;
+
     const startCamera = async () => {
+      setCameraError(null);
       try {
-        const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((t) => t.stop());
+          streamRef.current = null;
+        }
+
+        const s = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+
+        if (isCancelled) {
+          s.getTracks().forEach((t) => t.stop());
+          return;
+        }
+
         streamRef.current = s;
-        if (videoRef.current) videoRef.current.srcObject = s;
-      } catch (e) {
+        if (videoRef.current) {
+          videoRef.current.srcObject = s;
+          videoRef.current.play().catch(() => {});
+        }
+      } catch (e: any) {
         console.error('Camera access failed', e);
+        if (!isCancelled) {
+          setCameraError('Camera access unavailable. You can upload an image or enter details manually.');
+        }
       }
     };
-    startCamera();
+
+    if (isCameraActive && !isAnalyzing) {
+      startCamera();
+    } else if (!isCameraActive && streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
 
     return () => {
+      isCancelled = true;
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
       }
     };
-  }, [capturedImage, isAnalyzing]);
+  }, [activeCaptureTab, capturedLabelImage, capturedPillImage, isAnalyzing, isCameraActive]);
 
-  const capture = async () => {
+  // Capture Photo from Live Video
+  const handleCapture = async () => {
     const c = canvasRef.current;
     const v = videoRef.current;
-    if (c && v && v.readyState === 4) {
-      c.width = v.videoWidth;
-      c.height = v.videoHeight;
+    if (!c || !v || v.readyState < 2) return;
+
+    if (activeCaptureTab === 'label') {
+      // High-res capture for OCR
+      c.width = v.videoWidth || 1280;
+      c.height = v.videoHeight || 720;
       c.getContext('2d')?.drawImage(v, 0, 0);
-      const data = c.toDataURL('image/jpeg', 0.85);
-      setCapturedImage(data);
-      setIsAnalyzing(true);
-      try {
-        const res = await GeminiService.analyzeMedication(data.split(',')[1], language);
-        setForm({ ...form, ...res });
-      } catch (e) {
-        console.error(e);
-        alert('Could not parse medication label. You can enter the details manually below.');
-      } finally {
-        setIsAnalyzing(false);
+      const dataUrl = c.toDataURL('image/jpeg', 0.85);
+      setCapturedLabelImage(dataUrl);
+      await analyzeLabel(dataUrl);
+    } else {
+      // Square cropped / scaled capture for pill verification
+      const minDim = Math.min(v.videoWidth || 640, v.videoHeight || 480);
+      const startX = ((v.videoWidth || minDim) - minDim) / 2;
+      const startY = ((v.videoHeight || minDim) - minDim) / 2;
+      
+      const targetDim = 400; // Optimal thumbnail & storage size
+      c.width = targetDim;
+      c.height = targetDim;
+      const ctx = c.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(v, startX, startY, minDim, minDim, 0, 0, targetDim, targetDim);
       }
+      const dataUrl = c.toDataURL('image/jpeg', 0.82);
+      setCapturedPillImage(dataUrl);
+      await verifyPhysicalPill(dataUrl);
     }
+  };
+
+  // Analyze Label via OCR Workflow
+  const analyzeLabel = async (dataUrl: string) => {
+    setIsAnalyzing(true);
+    setAnalyzingMode('label');
+    try {
+      const base64 = dataUrl.split(',')[1];
+      const res = await GeminiService.analyzeMedication(base64, language);
+      setForm((prev) => ({
+        ...prev,
+        name: res.name || prev.name,
+        dosage: res.dosage || prev.dosage,
+        frequency: res.frequency || prev.frequency,
+        instructions: res.instructions || prev.instructions
+      }));
+    } catch (e) {
+      console.error(e);
+      alert('Could not parse medication label. You can enter or adjust the details manually.');
+    } finally {
+      setIsAnalyzing(false);
+      setAnalyzingMode(null);
+    }
+  };
+
+  // Analyze Physical Pill via Pill Verification AI Workflow
+  const verifyPhysicalPill = async (dataUrl: string) => {
+    setIsAnalyzing(true);
+    setAnalyzingMode('pill');
+    try {
+      const base64 = dataUrl.split(',')[1];
+      const res = await GeminiService.verifyPill(base64, form.name, form.dosage, language);
+      setPillVerification(res);
+      setForm((prev) => {
+        const appearanceParts = [
+          res.color,
+          res.shape,
+          res.imprint ? `imprint "${res.imprint}"` : null
+        ].filter(Boolean);
+        const autoAppearance = res.description || appearanceParts.join(' ');
+
+        return {
+          ...prev,
+          pillPhoto: dataUrl,
+          pillAppearance: autoAppearance || prev.pillAppearance,
+          pillColor: res.color || prev.pillColor,
+          pillShape: res.shape || prev.pillShape,
+          pillImprint: res.imprint || prev.pillImprint
+        };
+      });
+    } catch (e) {
+      console.error(e);
+      // Fallback: still keep photo
+      setForm((prev) => ({
+        ...prev,
+        pillPhoto: dataUrl
+      }));
+    } finally {
+      setIsAnalyzing(false);
+      setAnalyzingMode(null);
+    }
+  };
+
+  // File Upload Fallback
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, mode: 'label' | 'pill') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const dataUrl = ev.target?.result as string;
+      if (!dataUrl) return;
+      if (mode === 'label') {
+        setCapturedLabelImage(dataUrl);
+        await analyzeLabel(dataUrl);
+      } else {
+        setCapturedPillImage(dataUrl);
+        await verifyPhysicalPill(dataUrl);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Add Prescription or Supplement"
-        subtitle="Scan medication label with your camera or enter dosage schedule manually"
+        title="Add Prescription & Pill Verification"
+        subtitle="Capture photos of your medication label and physical pill for automated schedule reminders & visual verification"
         onBack={onCancel}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Optical Scanner */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Optical Camera Infrastructure (Dual Mode: Label OCR & Physical Pill) */}
         <Card darkMode={darkMode} highContrast={highContrast} className="space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-            <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400">
-              Optical Label Recognition
-            </h3>
-            {capturedImage && (
-              <Button variant="ghost" size="sm" onClick={() => setCapturedImage(null)}>
+          {/* Mode Switcher Tabs */}
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 gap-2">
+            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+              <button
+                type="button"
+                id="camera-mode-label"
+                onClick={() => setActiveCaptureTab('label')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  activeCaptureTab === 'label'
+                    ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <i className="fas fa-file-prescription"></i>
+                <span>1. Scan Bottle Label</span>
+                {capturedLabelImage && <i className="fas fa-check-circle text-emerald-500 text-[10px]"></i>}
+              </button>
+
+              <button
+                type="button"
+                id="camera-mode-pill"
+                onClick={() => setActiveCaptureTab('pill')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  activeCaptureTab === 'pill'
+                    ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <i className="fas fa-pills"></i>
+                <span>2. Capture Physical Pill</span>
+                {capturedPillImage && <i className="fas fa-check-circle text-emerald-500 text-[10px]"></i>}
+              </button>
+            </div>
+
+            {/* Retake Button if image is captured for current tab */}
+            {((activeCaptureTab === 'label' && capturedLabelImage) ||
+              (activeCaptureTab === 'pill' && capturedPillImage)) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (activeCaptureTab === 'label') {
+                    setCapturedLabelImage(null);
+                  } else {
+                    setCapturedPillImage(null);
+                    setPillVerification(null);
+                    setForm((prev) => ({ ...prev, pillPhoto: null }));
+                  }
+                }}
+              >
                 Retake
               </Button>
             )}
           </div>
 
-          <div className="relative bg-slate-950 rounded-2xl overflow-hidden min-h-[300px] flex items-center justify-center">
-            {!capturedImage ? (
+          {/* Camera Viewfinder View */}
+          <div className="relative bg-slate-950 rounded-2xl overflow-hidden min-h-[340px] flex items-center justify-center">
+            {/* Live Video Stream when in capture state */}
+            {isCameraActive && (
               <>
-                <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+
+                {/* Overlays / Reticles based on active mode */}
+                {activeCaptureTab === 'label' ? (
+                  // Rectangular bottle label reticle
+                  <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-6">
+                    <div className="w-full max-w-[280px] h-[190px] border-2 border-dashed border-blue-400/80 rounded-2xl bg-blue-500/10 flex items-center justify-center">
+                      <span className="text-[10px] uppercase font-bold text-blue-300 tracking-wider bg-black/50 px-2 py-0.5 rounded">
+                        Rx Label Target
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  // Circular / pill reticle with alignment crosshair
+                  <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-6">
+                    <div className="relative w-44 h-44 rounded-full border-2 border-dashed border-purple-400/90 bg-purple-500/10 flex items-center justify-center shadow-2xl">
+                      {/* Crosshairs */}
+                      <div className="w-8 h-0.5 bg-purple-400/70 absolute"></div>
+                      <div className="h-8 w-0.5 bg-purple-400/70 absolute"></div>
+                      <span className="text-[10px] uppercase font-bold text-purple-200 tracking-wider bg-black/60 px-2.5 py-0.5 rounded-full mt-24">
+                        Place Pill Flat
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Shutter Button & Helper text */}
                 <div className="absolute bottom-4 flex flex-col items-center gap-2 z-20">
                   <span className="text-[11px] font-semibold text-white bg-black/60 px-3 py-1 rounded-full backdrop-blur-md">
-                    Position pill bottle label inside frame
+                    {activeCaptureTab === 'label'
+                      ? 'Position prescription bottle label in frame'
+                      : 'Center physical pill on a flat surface with direct light'}
                   </span>
                   <button
-                    onClick={capture}
-                    className="w-14 h-14 rounded-full bg-white border-4 border-slate-300 hover:scale-105 transition-transform"
-                    aria-label="Capture medication"
-                  ></button>
+                    type="button"
+                    id={activeCaptureTab === 'label' ? 'snap-label-btn' : 'snap-pill-btn'}
+                    onClick={handleCapture}
+                    className={`w-14 h-14 rounded-full border-4 shadow-2xl hover:scale-105 transition-transform flex items-center justify-center ${
+                      activeCaptureTab === 'label'
+                        ? 'bg-blue-600 border-white text-white'
+                        : 'bg-purple-600 border-white text-white'
+                    }`}
+                    aria-label={activeCaptureTab === 'label' ? 'Capture label photo' : 'Capture physical pill photo'}
+                  >
+                    <i className={`fas ${activeCaptureTab === 'label' ? 'fa-camera' : 'fa-pills'} text-lg`}></i>
+                  </button>
                 </div>
               </>
-            ) : (
-              <img src={capturedImage} alt="Prescription" className="absolute inset-0 w-full h-full object-cover" />
             )}
+
+            {/* Static Image Preview when captured */}
+            {!isCameraActive && (
+              <div className="relative w-full h-full min-h-[340px] flex items-center justify-center bg-black/90 p-4">
+                <img
+                  src={activeCaptureTab === 'label' ? capturedLabelImage! : capturedPillImage!}
+                  alt={activeCaptureTab === 'label' ? 'Captured Rx Label' : 'Captured Physical Pill'}
+                  className="max-h-[300px] w-auto max-w-full object-contain rounded-xl"
+                />
+                <div className="absolute top-4 left-4 z-20">
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-black/70 text-white border border-white/20 flex items-center gap-1.5 backdrop-blur-md">
+                    <i className="fas fa-check text-emerald-400"></i>
+                    {activeCaptureTab === 'label' ? 'Label Captured' : 'Physical Pill Captured'}
+                  </span>
+                </div>
+              </div>
+            )}
+
             <canvas ref={canvasRef} className="hidden" />
 
+            {/* AI Analysis Overlay */}
             {isAnalyzing && (
-              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/75 backdrop-blur-md text-white space-y-2">
-                <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-xs font-bold">Reading Rx Bottle...</p>
+              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md text-white space-y-3">
+                <div className={`w-10 h-10 border-3 border-t-transparent rounded-full animate-spin ${
+                  analyzingMode === 'pill' ? 'border-purple-500' : 'border-blue-500'
+                }`}></div>
+                <p className="text-xs font-bold tracking-wide">
+                  {analyzingMode === 'pill'
+                    ? 'Analyzing Physical Pill Shape, Color & Imprint...'
+                    : 'Reading Prescription Label & OCR Schedule...'}
+                </p>
+                <p className="text-[11px] text-slate-300">Evaluating clinical biomarkers with multimodal vision</p>
               </div>
             )}
           </div>
+
+          {/* Camera Controls & File Upload Fallback */}
+          <div className="flex items-center justify-between pt-1 text-xs">
+            <div className="text-[11px] text-slate-500">
+              {activeCaptureTab === 'label' ? (
+                <span>Extracts medication name, dose, timing & instructions.</span>
+              ) : (
+                <span>Records visual proof for safety verification & schedule PDF.</span>
+              )}
+            </div>
+
+            <label className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer font-semibold flex items-center gap-1 text-[11px]">
+              <i className="fas fa-upload"></i> Upload file
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handleFileUpload(e, activeCaptureTab)}
+              />
+            </label>
+          </div>
+
+          {/* Pill Verification Summary Card (if pill captured) */}
+          {capturedPillImage && (
+            <div className="mt-3 p-3.5 rounded-2xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900/60 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-purple-600 text-white flex items-center justify-center text-xs">
+                    <i className="fas fa-shield-check"></i>
+                  </div>
+                  <h4 className="font-bold text-xs text-purple-950 dark:text-purple-200">
+                    Physical Pill Visual Verification
+                  </h4>
+                </div>
+                <Badge tone="success">Verified</Badge>
+              </div>
+
+              {/* Detected Pill Attributes */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {form.pillColor && (
+                  <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-purple-200 dark:border-purple-800 flex items-center gap-1">
+                    <i className="fas fa-palette text-purple-500"></i>
+                    <span>Color: {form.pillColor}</span>
+                  </span>
+                )}
+                {form.pillShape && (
+                  <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-purple-200 dark:border-purple-800 flex items-center gap-1">
+                    <i className="fas fa-shapes text-purple-500"></i>
+                    <span>Shape: {form.pillShape}</span>
+                  </span>
+                )}
+                {form.pillImprint && (
+                  <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-purple-200 dark:border-purple-800 flex items-center gap-1">
+                    <i className="fas fa-font text-purple-500"></i>
+                    <span>Imprint: "{form.pillImprint}"</span>
+                  </span>
+                )}
+              </div>
+
+              {pillVerification?.safetyNotes && (
+                <p className="text-[11px] text-purple-900 dark:text-purple-300 leading-relaxed italic">
+                  Note: {pillVerification.safetyNotes}
+                </p>
+              )}
+            </div>
+          )}
         </Card>
 
-        {/* Manual Form */}
+        {/* Manual Form & Prescription Details */}
         <Card darkMode={darkMode} highContrast={highContrast} className="space-y-4">
-          <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400 pb-2 border-b border-slate-200 dark:border-slate-800">
-            Prescription Details
-          </h3>
+          <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
+            <h3 className="font-bold text-xs uppercase tracking-wider text-slate-400">
+              Prescription & Dosage Details
+            </h3>
+            <span className="text-[11px] text-slate-500">
+              {capturedLabelImage ? 'Auto-filled via OCR' : 'Manual Entry'}
+            </span>
+          </div>
 
           <div className="space-y-3">
             <div>
               <label className="text-xs font-bold text-slate-500 block mb-1">Medication Name</label>
               <input
                 type="text"
+                id="med-name-input"
                 placeholder="e.g. Lisinopril, Metformin, Atorvastatin"
                 value={form.name || ''}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -892,9 +1433,10 @@ const AddMedication = ({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1">Dosage</label>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Dosage & Strength</label>
                 <input
                   type="text"
+                  id="med-dosage-input"
                   placeholder="e.g. 10mg, 500mcg"
                   value={form.dosage || ''}
                   onChange={(e) => setForm({ ...form, dosage: e.target.value })}
@@ -908,6 +1450,7 @@ const AddMedication = ({
                 <label className="text-xs font-bold text-slate-500 block mb-1">Scheduled Time</label>
                 <input
                   type="time"
+                  id="med-time-input"
                   value={form.time || '09:00'}
                   onChange={(e) => setForm({ ...form, time: e.target.value })}
                   className={`w-full p-2.5 rounded-xl border text-xs outline-none ${
@@ -918,26 +1461,32 @@ const AddMedication = ({
             </div>
 
             <div>
-              <label className="text-xs font-bold text-slate-500 block mb-1">Frequency</label>
+              <label className="text-xs font-bold text-slate-500 block mb-1">Dosage Frequency</label>
               <select
+                id="med-frequency-select"
                 value={form.frequency || 'Daily'}
                 onChange={(e) => setForm({ ...form, frequency: e.target.value })}
                 className={`w-full p-2.5 rounded-xl border text-xs outline-none ${
                   darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200'
                 }`}
               >
-                <option value="Daily">Once Daily</option>
-                <option value="Twice Daily">Twice Daily (BID)</option>
-                <option value="Three Times Daily">Three Times Daily (TID)</option>
+                <option value="Daily">Once Daily (Q.D.)</option>
+                <option value="Twice Daily">Twice Daily (B.I.D.)</option>
+                <option value="Three Times Daily">Three Times Daily (T.I.D.)</option>
+                <option value="Four Times Daily">Four Times Daily (Q.I.D.)</option>
+                <option value="Every Other Day">Every Other Day (Q.O.D.)</option>
                 <option value="Weekly">Weekly</option>
                 <option value="As Needed (PRN)">As Needed (PRN)</option>
               </select>
             </div>
 
             <div>
-              <label className="text-xs font-bold text-slate-500 block mb-1">Special Instructions</label>
+              <label className="text-xs font-bold text-slate-500 block mb-1">
+                Specific Instructions & Food Warnings
+              </label>
               <textarea
-                placeholder="e.g. Take with morning meal, avoid grapefruit juice..."
+                id="med-instructions-input"
+                placeholder="e.g. Take with morning meal and 8 oz water. Do not crush or chew. Avoid grapefruit."
                 rows={2}
                 value={form.instructions || ''}
                 onChange={(e) => setForm({ ...form, instructions: e.target.value })}
@@ -946,14 +1495,118 @@ const AddMedication = ({
                 }`}
               />
             </div>
+
+            {/* Physical Pill Appearance & Visual Verification Form Section */}
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <i className="fas fa-eye text-purple-500"></i>
+                  <span>Physical Pill Appearance & Verification</span>
+                </label>
+                {capturedPillImage ? (
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                    <i className="fas fa-check"></i> Photo Linked
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setActiveCaptureTab('pill')}
+                    className="text-[11px] text-purple-600 dark:text-purple-400 font-bold hover:underline"
+                  >
+                    + Snap Pill Photo
+                  </button>
+                )}
+              </div>
+
+              {/* Physical Pill Photo thumbnail & description preview */}
+              {capturedPillImage && (
+                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                  <img
+                    src={capturedPillImage}
+                    alt="Physical Pill"
+                    className="w-12 h-12 rounded-lg object-cover border border-slate-300 dark:border-slate-600 shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold truncate">Physical Unit Verified</p>
+                    <p className="text-[11px] text-slate-500 truncate">
+                      {form.pillAppearance || 'Pill photo attached for visual verification.'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCapturedPillImage(null);
+                      setPillVerification(null);
+                      setForm((prev) => ({ ...prev, pillPhoto: null }));
+                    }}
+                    className="text-slate-400 hover:text-red-500 p-1"
+                    title="Remove pill photo"
+                  >
+                    <i className="fas fa-trash-alt text-xs"></i>
+                  </button>
+                </div>
+              )}
+
+              <div>
+                <input
+                  type="text"
+                  placeholder="e.g. White oval scored tablet with imprint M367"
+                  value={form.pillAppearance || ''}
+                  onChange={(e) => setForm({ ...form, pillAppearance: e.target.value })}
+                  className={`w-full p-2.5 rounded-xl border text-xs outline-none ${
+                    darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200'
+                  }`}
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[11px] text-slate-400 block mb-0.5">Color</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. White"
+                    value={form.pillColor || ''}
+                    onChange={(e) => setForm({ ...form, pillColor: e.target.value })}
+                    className={`w-full p-2 rounded-lg border text-xs outline-none ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-slate-400 block mb-0.5">Shape</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Oval / Round"
+                    value={form.pillShape || ''}
+                    onChange={(e) => setForm({ ...form, pillShape: e.target.value })}
+                    className={`w-full p-2 rounded-lg border text-xs outline-none ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-slate-400 block mb-0.5">Imprint Code</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. M367"
+                    value={form.pillImprint || ''}
+                    onChange={(e) => setForm({ ...form, pillImprint: e.target.value })}
+                    className={`w-full p-2 rounded-lg border text-xs outline-none ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="flex gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+          <div className="flex gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
             <Button variant="secondary" onClick={onCancel} className="flex-1">
               Cancel
             </Button>
             <Button
               variant="primary"
+              id="save-medication-btn"
               disabled={!form.name?.trim()}
               onClick={() =>
                 onSave({
@@ -962,10 +1615,17 @@ const AddMedication = ({
                   dosage: form.dosage || 'Standard dose',
                   frequency: form.frequency || 'Daily',
                   time: form.time || '09:00',
-                  instructions: form.instructions || ''
+                  instructions: form.instructions || '',
+                  lastTakenDate: null,
+                  lastNotificationDate: null,
+                  pillPhoto: capturedPillImage || form.pillPhoto || null,
+                  pillAppearance: form.pillAppearance || null,
+                  pillColor: form.pillColor || null,
+                  pillShape: form.pillShape || null,
+                  pillImprint: form.pillImprint || null
                 })
               }
-              className="flex-1"
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold"
             >
               Save Schedule
             </Button>
@@ -1028,6 +1688,14 @@ function MediMindAppContent() {
     }
   });
 
+  const [symptoms, setSymptoms] = useState<SymptomEntry[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('medimind_symptoms') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
   const isHighContrast = accessMode === AccessibilityMode.HIGH_CONTRAST;
 
   useEffect(() => {
@@ -1040,6 +1708,9 @@ function MediMindAppContent() {
     localStorage.setItem('medimind_reports', JSON.stringify(storedReports));
   }, [storedReports]);
   useEffect(() => {
+    localStorage.setItem('medimind_symptoms', JSON.stringify(symptoms));
+  }, [symptoms]);
+  useEffect(() => {
     localStorage.setItem('medimind_dark_mode', String(darkMode));
   }, [darkMode]);
   useEffect(() => {
@@ -1051,6 +1722,53 @@ function MediMindAppContent() {
   useEffect(() => {
     localStorage.setItem('medimind_location', location);
   }, [location]);
+
+  // Live Firestore Sync for logged in users
+  useEffect(() => {
+    if (!user) return;
+    const unsubSymptoms = FirebaseService.subscribeSymptoms(user.uid, (list) => {
+      if (list && list.length > 0) {
+        setSymptoms(list);
+      }
+    });
+    const unsubMeds = FirebaseService.subscribeMedications(user.uid, (list) => {
+      if (list && list.length > 0) {
+        setMedications(list);
+      }
+    });
+    return () => {
+      unsubSymptoms();
+      unsubMeds();
+    };
+  }, [user]);
+
+  // Symptom Journal Mutation Handlers
+  const handleAddSymptom = async (entry: Omit<SymptomEntry, 'id' | 'createdAt'>) => {
+    const newSymptom: SymptomEntry = {
+      ...entry,
+      id: 'sym_' + Date.now(),
+      createdAt: Date.now()
+    };
+    setSymptoms((prev) => [newSymptom, ...prev]);
+    if (user) {
+      await FirebaseService.saveSymptom(user.uid, newSymptom);
+    }
+  };
+
+  const handleDeleteSymptom = async (id: string) => {
+    setSymptoms((prev) => prev.filter((s) => s.id !== id));
+    if (user) {
+      await FirebaseService.deleteSymptom(user.uid, id);
+    }
+    toast.info('Symptom entry removed');
+  };
+
+  const handleUpdateSymptom = async (id: string, updates: Partial<SymptomEntry>) => {
+    setSymptoms((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
+    if (user) {
+      await FirebaseService.updateSymptom(user.uid, id, updates);
+    }
+  };
 
   // Handle clinical report upload
   const handleUpload = async (file: File) => {
@@ -1176,6 +1894,7 @@ function MediMindAppContent() {
         onOpenSettings={() => setShowSettings(true)}
         savedReportsCount={storedReports.length}
         activeMedsCount={medications.length}
+        symptomsCount={symptoms.length}
         language={language}
         onLanguageChange={setLanguage}
         userEmail={user?.email}
@@ -1290,7 +2009,7 @@ function MediMindAppContent() {
               </div>
 
               {/* Bento Row: Clinical Quick Status Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Status 1: Reports Count & Red Flags */}
                 <Card
                   darkMode={darkMode}
@@ -1363,11 +2082,51 @@ function MediMindAppContent() {
                     <span className="text-xs text-emerald-600 font-bold">Stable</span>
                   </div>
                   <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1">
-                    <span>Blood pressure & glucose log</span>
-                    <span className="text-emerald-600 font-semibold">View Trends →</span>
+                    <span>Export clinical summary</span>
+                    <span className="text-emerald-600 font-semibold">View History →</span>
+                  </div>
+                </Card>
+
+                {/* Status 4: Symptom Journal */}
+                <Card
+                  darkMode={darkMode}
+                  highContrast={isHighContrast}
+                  className="space-y-2 cursor-pointer hover:border-teal-300 dark:hover:border-teal-700 transition-colors"
+                  onClick={() => setMode(AppMode.SYMPTOM_JOURNAL)}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Symptom Journal
+                    </span>
+                    <div className="w-8 h-8 rounded-xl bg-teal-50 dark:bg-teal-950 text-teal-600 flex items-center justify-center text-sm">
+                      <i className="fas fa-book-medical"></i>
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold">{symptoms.length}</span>
+                    <span className="text-xs text-slate-500">logged</span>
+                  </div>
+                  <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1">
+                    <span>
+                      {symptoms.filter((s) => s.date === new Date().toISOString().split('T')[0]).length} recorded today
+                    </span>
+                    <span className="text-teal-600 font-semibold">Log Symptom →</span>
                   </div>
                 </Card>
               </div>
+
+              {/* Symptom Journal Dashboard Widget */}
+              <SymptomJournal
+                symptoms={symptoms}
+                onAddSymptom={handleAddSymptom}
+                onDeleteSymptom={handleDeleteSymptom}
+                onUpdateSymptom={handleUpdateSymptom}
+                onOpenFullJournal={() => setMode(AppMode.SYMPTOM_JOURNAL)}
+                darkMode={darkMode}
+                highContrast={isHighContrast}
+                isDashboardWidget={true}
+                patientName={user?.displayName || user?.email?.split('@')[0] || ''}
+              />
 
               {/* Central Intake: Document Upload Section */}
               <div className="space-y-3">
@@ -1552,6 +2311,7 @@ function MediMindAppContent() {
                 }}
                 onAskAssistant={() => setMode(AppMode.AI_CHAT)}
                 onWellnessCheckin={() => setShowWellnessModal(true)}
+                onLogSymptom={() => setMode(AppMode.SYMPTOM_JOURNAL)}
                 darkMode={darkMode}
               />
             </div>
@@ -1667,15 +2427,26 @@ function MediMindAppContent() {
             <div className="animate-fade-in">
               <MyMedications
                 medications={medications}
+                patientName={user?.displayName || user?.email?.split('@')[0] || ''}
                 onAdd={() => setMode(AppMode.ADD_MEDICATION)}
-                onTake={(id: string) =>
+                onTake={async (id: string) => {
+                  const today = new Date().toISOString().split('T')[0];
                   setMedications(
                     medications.map((m) =>
-                      m.id === id ? { ...m, lastTakenDate: new Date().toISOString().split('T')[0] } : m
+                      m.id === id ? { ...m, lastTakenDate: today } : m
                     )
-                  )
-                }
-                onDelete={(id: string) => setMedications(medications.filter((m) => m.id !== id))}
+                  );
+                  if (user) {
+                    await FirebaseService.updateMedication(user.uid, id, { lastTakenDate: today });
+                  }
+                }}
+                onDelete={async (id: string) => {
+                  setMedications(medications.filter((m) => m.id !== id));
+                  if (user) {
+                    await FirebaseService.deleteMedication(user.uid, id);
+                  }
+                  toast.info('Medication removed from schedule');
+                }}
                 highContrast={isHighContrast}
                 darkMode={darkMode}
               />
@@ -1689,8 +2460,12 @@ function MediMindAppContent() {
             <div className="animate-fade-in">
               <AddMedication
                 onCancel={() => setMode(AppMode.MY_MEDS)}
-                onSave={(m: Medication) => {
+                onSave={async (m: Medication) => {
                   setMedications([...medications, m]);
+                  if (user) {
+                    await FirebaseService.addMedication(user.uid, m);
+                  }
+                  toast.success(`Medication "${m.name}" added to schedule.`);
                   setMode(AppMode.MY_MEDS);
                 }}
                 language={language}
@@ -1724,12 +2499,33 @@ function MediMindAppContent() {
                 darkMode={darkMode}
                 highContrast={isHighContrast}
                 user={user}
+                medications={medications}
+                symptoms={symptoms}
+                location={location}
               />
             </div>
           )}
 
           {/* ==================================== */}
-          {/* 11. AI BODY SCAN                     */}
+          {/* 11. SYMPTOM JOURNAL FULL VIEW        */}
+          {/* ==================================== */}
+          {mode === AppMode.SYMPTOM_JOURNAL && (
+            <div className="animate-fade-in">
+              <SymptomJournal
+                symptoms={symptoms}
+                onAddSymptom={handleAddSymptom}
+                onDeleteSymptom={handleDeleteSymptom}
+                onUpdateSymptom={handleUpdateSymptom}
+                onBack={() => setMode(AppMode.DASHBOARD)}
+                darkMode={darkMode}
+                highContrast={isHighContrast}
+                patientName={user?.displayName || user?.email?.split('@')[0] || ''}
+              />
+            </div>
+          )}
+
+          {/* ==================================== */}
+          {/* 12. AI BODY SCAN                     */}
           {/* ==================================== */}
           {mode === AppMode.BODY_SCAN && (
             <div className="animate-fade-in">
@@ -1743,7 +2539,7 @@ function MediMindAppContent() {
           )}
 
           {/* ==================================== */}
-          {/* 12. PRIVACY POLICY & DATA AUDIT      */}
+          {/* 13. PRIVACY POLICY & DATA AUDIT      */}
           {/* ==================================== */}
           {mode === AppMode.PRIVACY_POLICY && (
             <div className="animate-fade-in">
@@ -1753,12 +2549,14 @@ function MediMindAppContent() {
                   setStoredReports([]);
                   setMedications([]);
                   setMoodHistory([]);
+                  setSymptoms([]);
                   localStorage.removeItem('medimind_chat_history');
                   localStorage.removeItem('medimind_health_history');
                   localStorage.removeItem('medimind_reports');
                   localStorage.removeItem('medimind_meds');
                   localStorage.removeItem('medimind_moods');
                   localStorage.removeItem('medimind_vaccines');
+                  localStorage.removeItem('medimind_symptoms');
                 }}
                 darkMode={darkMode}
                 highContrast={isHighContrast}

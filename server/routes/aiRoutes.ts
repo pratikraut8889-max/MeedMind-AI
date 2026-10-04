@@ -7,7 +7,7 @@ import { createRateLimiter } from '../middleware/rateLimiter';
 import { runChatWorkflow } from '../ai/workflows/chatWorkflow';
 import { runReportAnalysisWorkflow } from '../ai/workflows/reportAnalysisWorkflow';
 import { runSymptomAnalysisWorkflow } from '../ai/workflows/symptomAnalysisWorkflow';
-import { runMedicationWorkflow } from '../ai/workflows/medicationWorkflow';
+import { runMedicationWorkflow, runPillVerificationWorkflow } from '../ai/workflows/medicationWorkflow';
 import { runEmergencyTriageWorkflow } from '../ai/workflows/emergencyTriageWorkflow';
 import { runDoctorLetterWorkflow } from '../ai/workflows/doctorLetterWorkflow';
 import { runBodyScanWorkflow, runVaccineCardWorkflow } from '../ai/workflows/imageAnalysisWorkflow';
@@ -239,6 +239,46 @@ aiRouter.post('/medication-check', uploadLimiter, async (req: Request, res: Resp
     res.status(500).json({
       error: 'MEDICATION_CHECK_ERROR',
       message: 'Could not analyze medication information. Please ensure label text is well-lit and in focus.'
+    });
+  }
+});
+
+/**
+ * 5b. Physical Pill Visual Verification
+ * POST /api/ai/pill-verify
+ */
+aiRouter.post('/pill-verify', uploadLimiter, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { base64Image, mimeType = 'image/jpeg', medicationName, dosage, language = 'English' } = req.body;
+
+    if (!base64Image) {
+      res.status(400).json({ error: 'MISSING_IMAGE', message: 'A photo of the physical pill is required for visual verification.' });
+      return;
+    }
+
+    const validation = validateBase64Upload(base64Image, mimeType);
+    if (!validation.valid || !validation.cleanBase64) {
+      res.status(400).json({ error: 'IMAGE_VALIDATION_FAILED', message: validation.error || 'Invalid pill image.' });
+      return;
+    }
+
+    const result = await runPillVerificationWorkflow({
+      base64Image: validation.cleanBase64,
+      mimeType: validation.mimeType,
+      medicationName,
+      dosage,
+      language
+    });
+
+    res.status(200).json({
+      success: true,
+      data: result.data
+    });
+  } catch (error: any) {
+    console.error('[Pill Verification Route Error]', error?.message || error);
+    res.status(500).json({
+      error: 'PILL_VERIFICATION_ERROR',
+      message: 'Could not visually verify the physical pill. Please ensure good lighting and clear camera focus.'
     });
   }
 });

@@ -50,7 +50,12 @@ service cloud.firestore {
         && data.time is string && data.time.size() == 5 && data.time.matches('^[0-9]{2}:[0-9]{2}$')
         && data.instructions is string && data.instructions.size() <= 500
         && (data.lastTakenDate == null || (data.lastTakenDate is string && data.lastTakenDate.size() <= 10))
-        && (data.lastNotificationDate == null || (data.lastNotificationDate is string && data.lastNotificationDate.size() <= 10));
+        && (data.lastNotificationDate == null || (data.lastNotificationDate is string && data.lastNotificationDate.size() <= 10))
+        && (data.pillAppearance == null || (data.pillAppearance is string && data.pillAppearance.size() <= 300))
+        && (data.pillColor == null || (data.pillColor is string && data.pillColor.size() <= 50))
+        && (data.pillShape == null || (data.pillShape is string && data.pillShape.size() <= 50))
+        && (data.pillImprint == null || (data.pillImprint is string && data.pillImprint.size() <= 50))
+        && (data.pillPhoto == null || (data.pillPhoto is string && data.pillPhoto.size() <= 100000));
     }
 
     function isValidMoodEntry(data) {
@@ -85,6 +90,19 @@ service cloud.firestore {
         && (data.metrics == null || data.metrics is list);
     }
 
+    function isValidSymptomEntry(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.date is string && data.date.size() <= 10
+        && (data.time == null || (data.time is string && data.time.size() <= 10))
+        && data.symptom is string && data.symptom.size() <= 200
+        && data.severity is int && data.severity >= 1 && data.severity <= 10
+        && data.duration is string && data.duration.size() <= 100
+        && (data.bodyPart == null || (data.bodyPart is string && data.bodyPart.size() <= 100))
+        && (data.triggers == null || (data.triggers is string && data.triggers.size() <= 300))
+        && (data.notes == null || (data.notes is string && data.notes.size() <= 500))
+        && (data.createdAt == null || data.createdAt is int);
+    }
+
     // Collection Security Rules
 
     // User Profile Rules
@@ -105,7 +123,7 @@ service cloud.firestore {
         allow create: if isOwner(userId) && isValidId(medicationId) && isValidMedication(incoming());
         allow update: if isOwner(userId) && isValidId(medicationId) && isValidMedication(incoming())
           && (
-            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'dosage', 'frequency', 'time', 'instructions', 'lastTakenDate', 'lastNotificationDate'])
+            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'dosage', 'frequency', 'time', 'instructions', 'lastTakenDate', 'lastNotificationDate', 'pillPhoto', 'pillAppearance', 'pillColor', 'pillShape', 'pillImprint'])
           );
         allow delete: if isOwner(userId) && isValidId(medicationId);
       }
@@ -144,6 +162,18 @@ service cloud.firestore {
             incoming().diff(existing()).affectedKeys().hasOnly(['name', 'dateGiven', 'nextDueDate', 'status', 'notes'])
           );
         allow delete: if isOwner(userId) && isValidId(vaccineId);
+      }
+
+      // Symptoms journal subcollection
+      match /symptoms/{symptomId} {
+        allow get: if isOwner(userId) && isValidId(symptomId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(symptomId) && isValidSymptomEntry(incoming());
+        allow update: if isOwner(userId) && isValidId(symptomId) && isValidSymptomEntry(incoming())
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly(['symptom', 'severity', 'duration', 'date', 'time', 'bodyPart', 'triggers', 'notes', 'createdAt'])
+          );
+        allow delete: if isOwner(userId) && isValidId(symptomId);
       }
 
       // Health History subcollection (usually a singleton document 'main')

@@ -81,7 +81,8 @@ export const ReportResultView: React.FC<ReportResultViewProps> = ({
       const fileName = PDFExportService.exportAnalysisReport(result, {
         patientName: patientNameInput || undefined,
         reportDate: Date.now(),
-        fileName: 'MediMind_Clinical_Report'
+        fileName: 'MediMind_Clinical_Report',
+        location: location
       });
       showToast(`Exported clinical report as ${fileName}`);
     } catch (e) {
@@ -224,9 +225,9 @@ export const ReportResultView: React.FC<ReportResultViewProps> = ({
               size="sm"
               onClick={handleExportPDF}
               leftIcon={<i className="fas fa-file-pdf text-rose-500"></i>}
-              title="Download clinical PDF portfolio"
+              title="Download formatted clinical PDF for medical professionals"
             >
-              PDF
+              Export PDF
             </Button>
 
             <Button

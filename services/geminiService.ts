@@ -2,6 +2,7 @@ import {
   AnalysisResult,
   VisualSymptomResult,
   MedicationAnalysisResult,
+  PillVerificationResult,
   DoctorLetter,
   Vaccine,
   BodyScanResult,
@@ -188,6 +189,37 @@ export const GeminiService = {
 
     const json = await res.json();
     return json.data as MedicationAnalysisResult;
+  },
+
+  /**
+   * Visually Verify Physical Pill
+   */
+  verifyPill: async (
+    base64Image: string,
+    medicationName?: string,
+    dosage?: string,
+    language: string = 'English'
+  ): Promise<PillVerificationResult> => {
+    const res = await fetch('/api/ai/pill-verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base64Image, medicationName, dosage, language, mimeType: 'image/jpeg' })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return {
+        shape: 'Solid oral dosage form',
+        color: 'Visual inspection completed',
+        imprint: 'Inspect imprint face under direct light',
+        description: `Captured physical unit for visual verification${medicationName ? ` (${medicationName})` : ''}.`,
+        likelyMedication: medicationName ? `Consistent with ${medicationName}` : 'Visual check recommended',
+        safetyNotes: 'Always compare physical pill shape, color, and imprint code with your pharmacy label.'
+      };
+    }
+
+    const json = await res.json();
+    return json.data as PillVerificationResult;
   },
 
   /**

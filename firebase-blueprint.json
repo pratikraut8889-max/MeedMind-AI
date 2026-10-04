@@ -34,7 +34,12 @@
         "time": { "type": "string", "pattern": "^[0-9]{2}:[0-9]{2}$" },
         "instructions": { "type": "string", "maxLength": 500 },
         "lastTakenDate": { "type": "string", "format": "date" },
-        "lastNotificationDate": { "type": "string", "format": "date" }
+        "lastNotificationDate": { "type": "string", "format": "date" },
+        "pillAppearance": { "type": "string", "maxLength": 300 },
+        "pillColor": { "type": "string", "maxLength": 50 },
+        "pillShape": { "type": "string", "maxLength": 50 },
+        "pillImprint": { "type": "string", "maxLength": 50 },
+        "pillPhoto": { "type": "string" }
       },
       "required": ["id", "name", "dosage", "frequency", "time", "instructions"]
     },
@@ -92,6 +97,24 @@
         "metrics": { "type": "array", "description": "Tracked health metrics over time" }
       },
       "required": ["conditions", "surgeries", "familyHistory", "allergies", "bloodType", "organDonor"]
+    },
+    "SymptomEntry": {
+      "title": "SymptomEntry",
+      "description": "Daily symptom log entry with severity and duration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "time": { "type": "string" },
+        "symptom": { "type": "string", "maxLength": 200 },
+        "severity": { "type": "integer" },
+        "duration": { "type": "string", "maxLength": 100 },
+        "bodyPart": { "type": "string", "maxLength": 100 },
+        "triggers": { "type": "string", "maxLength": 300 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "date", "symptom", "severity", "duration"]
     }
   },
   "firestore": {
@@ -114,6 +137,10 @@
     "/users/{userId}/vaccines/{vaccineId}": {
       "schema": "Vaccine",
       "description": "Store user vaccination records"
+    },
+    "/users/{userId}/symptoms/{symptomId}": {
+      "schema": "SymptomEntry",
+      "description": "Store user daily symptom journal entries"
     },
     "/users/{userId}/healthHistory/main": {
       "schema": "HealthHistory",

@@ -8,6 +8,7 @@ interface AppNavigationProps {
   onOpenSettings: () => void;
   savedReportsCount: number;
   activeMedsCount: number;
+  symptomsCount?: number;
   darkMode: boolean;
   highContrast: boolean;
   language: string;
@@ -23,6 +24,7 @@ export const AppNavigation: React.FC<AppNavigationProps> = ({
   onOpenSettings,
   savedReportsCount,
   activeMedsCount,
+  symptomsCount,
   darkMode,
   highContrast,
   language,
@@ -39,6 +41,13 @@ export const AppNavigation: React.FC<AppNavigationProps> = ({
       label: 'Dashboard',
       icon: 'fas fa-chart-pie',
       description: 'Overview & vitals glance'
+    },
+    {
+      mode: AppMode.SYMPTOM_JOURNAL,
+      label: 'Symptom Journal',
+      icon: 'fas fa-book-medical',
+      description: 'Record daily episodes & duration',
+      count: symptomsCount
     },
     {
       mode: AppMode.AI_CHAT,

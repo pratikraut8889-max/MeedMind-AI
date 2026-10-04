@@ -21,7 +21,7 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
-import { Medication, MoodEntry, StoredReport, Vaccine, HealthHistory } from '../types';
+import { Medication, MoodEntry, StoredReport, Vaccine, HealthHistory, SymptomEntry } from '../types';
 
 // Google Auth Provider setup
 const googleProvider = new GoogleAuthProvider();
@@ -290,6 +290,54 @@ export const FirebaseService = {
       await setDoc(doc(db, 'users', userId, 'healthHistory', 'main'), history);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, path);
+    }
+  },
+
+  // Symptom Journal
+  subscribeSymptoms(userId: string, callback: (symptoms: SymptomEntry[]) => void) {
+    const path = `users/${userId}/symptoms`;
+    const q = collection(db, 'users', userId, 'symptoms');
+    return onSnapshot(q, (snap) => {
+      const list: SymptomEntry[] = [];
+      snap.forEach((docSnap) => {
+        list.push(docSnap.data() as SymptomEntry);
+      });
+      // Sort newest first
+      list.sort((a, b) => {
+        const timeA = a.createdAt || (new Date(a.date).getTime() || 0);
+        const timeB = b.createdAt || (new Date(b.date).getTime() || 0);
+        return timeB - timeA;
+      });
+      callback(list);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
+    });
+  },
+
+  async saveSymptom(userId: string, symptom: SymptomEntry) {
+    const path = `users/${userId}/symptoms/${symptom.id}`;
+    try {
+      await setDoc(doc(db, 'users', userId, 'symptoms', symptom.id), symptom);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
+  },
+
+  async updateSymptom(userId: string, symptomId: string, updates: Partial<SymptomEntry>) {
+    const path = `users/${userId}/symptoms/${symptomId}`;
+    try {
+      await updateDoc(doc(db, 'users', userId, 'symptoms', symptomId), updates);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  },
+
+  async deleteSymptom(userId: string, symptomId: string) {
+    const path = `users/${userId}/symptoms/${symptomId}`;
+    try {
+      await deleteDoc(doc(db, 'users', userId, 'symptoms', symptomId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
     }
   }
 };
