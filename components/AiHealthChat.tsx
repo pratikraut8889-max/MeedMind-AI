@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChatMessage, SUPPORTED_LANGUAGES, UrgencyLevel } from '../types';
+import { ChatMessage, SUPPORTED_LANGUAGES, UrgencyLevel, CareProfile } from '../types';
 import { GeminiService } from '../services/geminiService';
 import { MedicalCitationCard } from './MedicalCitationCard';
 
@@ -8,13 +8,15 @@ interface AiHealthChatProps {
   darkMode: boolean;
   highContrast: boolean;
   onBack: () => void;
+  careProfile?: CareProfile | null;
 }
 
 export const AiHealthChat: React.FC<AiHealthChatProps> = ({
   language,
   darkMode,
   highContrast,
-  onBack
+  onBack,
+  careProfile
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     const saved = localStorage.getItem('medimind_chat_history');
@@ -73,7 +75,24 @@ export const AiHealthChat: React.FC<AiHealthChatProps> = ({
 
     try {
       const historyContext = messages.slice(-6);
-      const result = await GeminiService.sendChatMessage(textToSend, language, historyContext);
+      const userContext = careProfile
+        ? {
+            careProfile: {
+              name: careProfile.name,
+              relationship: careProfile.relationship,
+              ageRange: careProfile.ageRange,
+              healthGoals: careProfile.healthGoals,
+              knownConditions: careProfile.knownConditions,
+              allergies: careProfile.allergies,
+              currentMedications: careProfile.currentMedications,
+              careNotes: careProfile.careNotes
+            },
+            currentMeds: careProfile.currentMedications,
+            knownConditions: careProfile.knownConditions
+          }
+        : undefined;
+
+      const result = await GeminiService.sendChatMessage(textToSend, language, historyContext, userContext);
 
       const assistantMessage: ChatMessage = {
         id: 'msg_' + Date.now() + '_a',
@@ -158,12 +177,19 @@ export const AiHealthChat: React.FC<AiHealthChatProps> = ({
     }
   };
 
-  const quickPrompts = [
-    'Explain my Complete Blood Count (CBC) results',
-    'What does high systolic blood pressure mean?',
-    'Common drug interactions with blood pressure meds',
-    'Red flags for persistent cough or fever'
-  ];
+  const quickPrompts = careProfile?.name
+    ? [
+        `What should we monitor for ${careProfile.name.split(' ')[0]}'s health goals?`,
+        `Safe guidance for ${careProfile.knownConditions || 'hypertension and arthritis'}`,
+        `Questions for ${careProfile.name.split(' ')[0]}'s doctor regarding medications`,
+        `Daily hydration & wellness tips for ${careProfile.relationship || 'a loved one'}`
+      ]
+    : [
+        'Explain my Complete Blood Count (CBC) results',
+        'What does high systolic blood pressure mean?',
+        'Common drug interactions with blood pressure meds',
+        'Red flags for persistent cough or fever'
+      ];
 
   return (
     <div className={`h-full flex flex-col max-w-4xl mx-auto ${highContrast ? 'text-yellow-300' : darkMode ? 'text-white' : 'text-slate-800'}`}>
@@ -205,6 +231,28 @@ export const AiHealthChat: React.FC<AiHealthChatProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Personalized Care Profile Notice */}
+      {careProfile && careProfile.name && (
+        <div className="mb-3 p-3 rounded-2xl bg-gradient-to-r from-rose-500/10 to-pink-500/10 border border-rose-500/30 flex items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-rose-600 text-white flex items-center justify-center text-xs shrink-0 shadow-sm">
+              <i className="fas fa-heart"></i>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-900 dark:text-white">
+                Consulting for {careProfile.name} ({careProfile.relationship}{careProfile.ageRange ? ` • ${careProfile.ageRange}` : ''})
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                AI answers personalized with care notes and active medication context.
+              </p>
+            </div>
+          </div>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 shrink-0">
+            Care Profile Active
+          </span>
+        </div>
+      )}
 
       {/* Messages Scroll Area */}
       <div className="flex-1 overflow-y-auto space-y-4 pr-1 pb-4">

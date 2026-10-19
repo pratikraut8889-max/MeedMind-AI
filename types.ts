@@ -135,12 +135,51 @@ export interface Medication {
   time: string; // HH:MM 24h format
   instructions: string;
   lastTakenDate: string | null; // YYYY-MM-DD
+  lastTakenTime?: string | null; // e.g. "09:42 AM"
   lastNotificationDate: string | null; // YYYY-MM-DD used to prevent double notifications
   pillPhoto?: string | null; // Photo data URL of physical pill for visual verification
   pillAppearance?: string | null; // e.g. "White oval scored tablet with imprint M367"
   pillColor?: string | null;
   pillShape?: string | null;
   pillImprint?: string | null;
+}
+
+export interface DrugInteraction {
+  severity: 'HIGH' | 'MODERATE' | 'LOW';
+  interactingDrug: string;
+  description: string;
+  clinicalRecommendation: string;
+}
+
+export interface DrugInteractionResult {
+  hasInteractions: boolean;
+  hasHighRiskInteraction: boolean;
+  summary: string;
+  interactions: DrugInteraction[];
+  disclaimer: string;
+}
+
+export interface CareProfile {
+  name: string;
+  relationship: string;
+  ageRange?: string;
+  healthGoals?: string;
+  knownConditions?: string;
+  allergies?: string;
+  currentMedications?: string;
+  preferredLanguage?: string;
+  careNotes?: string;
+  updatedAt?: number;
+}
+
+export interface AiEngineStatus {
+  provider: string;
+  model: string;
+  openModel: boolean;
+  ragEnabled: boolean;
+  safetyLayerEnabled: boolean;
+  embeddingModel: string;
+  preferredFamily: string;
 }
 
 export interface MedicationAnalysisResult {

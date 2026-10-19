@@ -294,3 +294,47 @@ Key Biomarkers: ${JSON.stringify(labMeasurements?.slice(0, 5) || [])}
 Provide exactly 2 to 3 fluid sentences capturing: (1) what test was run and core outcome, (2) any notable flags or abnormal levels, and (3) recommended follow-up priority. Single paragraph without bullet points.
 `
 };
+
+/**
+ * 9. Drug-Drug Interaction Safety Prompt (v1.0.0)
+ */
+export const DrugInteractionPrompt: PromptTemplate<{
+  newMedication: string;
+  dosage?: string;
+  currentMedications: string;
+  knownConditions?: string;
+  allergies?: string;
+  targetLanguage: string;
+  ragContext: string;
+}> = {
+  id: 'drug-interaction-safety',
+  version: '1.0.0',
+  feature: 'Drug-Drug Interaction Analysis',
+  systemInstruction: `${BASE_CLINICAL_SYSTEM_INSTRUCTION}
+Specialization: Clinical Pharmacovigilance & Drug-Drug Interaction Detection.
+Evaluate potential pharmacokinetic and pharmacodynamic interactions between a newly added drug and active prescription regimens.
+Classify interactions strictly as HIGH (contraindicated, severe risk of toxicity, bleeding, arrhythmias, or severe adverse events), MODERATE (monitoring or dosage timing adjustment required), or LOW (minor or theoretical).
+If no interactions exist between the new drug and current medications, set hasInteractions to false, hasHighRiskInteraction to false, and interactions to an empty list.`,
+  buildUserPrompt: ({ newMedication, dosage, currentMedications, knownConditions, allergies, targetLanguage, ragContext }) => `
+DRUG-DRUG INTERACTION EVALUATION DIRECTIVE:
+Target Language: ${targetLanguage}
+New Medication to be Added: ${newMedication} ${dosage ? `(${dosage})` : ''}
+Current Active Medications: ${currentMedications || 'None reported'}
+Patient Known Conditions: ${knownConditions || 'None reported'}
+Patient Allergies: ${allergies || 'None reported'}
+
+CLINICAL EVIDENCE BASE (RAG):
+${ragContext}
+
+TASKS:
+1. Cross-reference "${newMedication}" against every medication listed in Current Active Medications.
+2. Identify known pharmacokinetic (CYP450 enzyme competition, absorption interference) or pharmacodynamic (additive sedation, QT prolongation, bleeding risk, serotonin syndrome, severe hypotensive synergy) interactions.
+3. For each interaction found, detail:
+   - interactingDrug: name of the specific conflicting drug
+   - severity: "HIGH", "MODERATE", or "LOW"
+   - description: clear, non-jargon explanation of what can happen
+   - clinicalRecommendation: practical safety advice (e.g. "Do not combine without doctor approval", "Space doses by at least 2 to 4 hours", "Monitor blood pressure regularly")
+4. Provide a clear 1-2 sentence overall summary for the patient.
+`
+};
+

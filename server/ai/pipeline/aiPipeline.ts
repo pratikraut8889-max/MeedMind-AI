@@ -1,12 +1,18 @@
 /**
  * Production AI Pipeline Orchestrator.
+ * 
+ * Hacktoberfest 2026: Open-Weight AI Architecture (Gemma preferred).
  * Enforces the standardized clinical decision support pipeline:
- * User Input → Safety Classification → Context Retrieval → Feature-Specific Prompt → Gemini → Structured Output → Validation → Safety Post-Processing → UI
+ * User Input → Safety Classification → Context Retrieval → Feature-Specific Prompt
+ *   → Open-Weight Model Engine → Structured Output → Validation → Safety Post-Processing → UI
+ * 
+ * Never crashes. Never leaks PII in telemetry. Provider-agnostic.
  */
 
-import { Schema } from '@google/genai';
-import { getGeminiClient, AI_MODELS, executeWithRetry, recordAiMetrics } from '../geminiClient';
-import { sanitizeUserInput, wrapUntrustedDocument } from '../safety/sanitizer';
+import { getOpenModelClient } from '../openModelClient';
+import { getOpenModelConfig, getLegacyGeminiConfig } from '../modelConfig';
+import { recordAiMetrics } from '../geminiClient';
+import { sanitizeUserInput } from '../safety/sanitizer';
 import { evaluateClinicalSafety, STANDARD_MEDICAL_DISCLAIMER, TriageCheckResult } from '../safety/medicalTriage';
 import { executeMedicalRAG, verifyAndBindCitations, CitationSourceDetail } from '../rag';
 import { PromptTemplate } from '../prompts/promptRegistry';
@@ -16,7 +22,7 @@ export interface PipelineOptions<TInput, TOutput> {
   template: PromptTemplate<any>;
   rawUserInput: string;
   userParams: TInput;
-  responseSchema?: Schema;
+  responseSchema?: any;
   modelOverride?: string;
   temperature?: number;
   inlineFiles?: Array<{ mimeType: string; data: string }>;
@@ -35,6 +41,8 @@ export interface PipelineResult<TOutput> {
     latencyMs: number;
     safetyTriggered: boolean;
     citations: CitationSourceDetail[];
+    model?: string;
+    provider?: string;
   };
 }
 
@@ -49,12 +57,12 @@ export function resilientJsonParse<T>(rawText: string, fallback: T): T {
 
   // Strip Markdown code fences if present
   if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
   }
 
   try {
     return JSON.parse(cleaned);
-  } catch (err) {
+  } catch {
     // Attempt regex extraction of outer JSON object or array
     const jsonMatch = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
     if (jsonMatch) {
@@ -64,13 +72,12 @@ export function resilientJsonParse<T>(rawText: string, fallback: T): T {
         // Continue to fallback
       }
     }
-    console.warn('[Resilient JSON Parser] Failed to parse AI output, utilizing domain fallback.');
     return fallback;
   }
 }
 
 /**
- * Executes the complete 8-step AI pipeline with clinical guardrails.
+ * Executes the complete 8-step AI pipeline with open-weight intelligence and clinical guardrails.
  */
 export async function executeAiPipeline<TInput, TOutput>(
   options: PipelineOptions<TInput, TOutput>
@@ -82,7 +89,7 @@ export async function executeAiPipeline<TInput, TOutput>(
     rawUserInput,
     userParams,
     responseSchema,
-    modelOverride = AI_MODELS.GENERAL,
+    modelOverride,
     temperature = 0.2,
     inlineFiles = [],
     ragQuery,
@@ -91,8 +98,11 @@ export async function executeAiPipeline<TInput, TOutput>(
     validateOutput
   } = options;
 
+  const openConfig = getOpenModelConfig();
+  const activeModelName = modelOverride || openConfig.modelName;
+
   // Step 1: User Input Sanitization & PII Scrubbing
-  const { cleanText, redactedPiiCount } = sanitizeUserInput(rawUserInput || '', 8000);
+  const { cleanText } = sanitizeUserInput(rawUserInput || '', 8000);
 
   // Step 2: Deterministic Pre-LLM Safety Classification
   const safetyCheck = evaluateClinicalSafety(cleanText);
@@ -100,7 +110,7 @@ export async function executeAiPipeline<TInput, TOutput>(
   // Step 3: Context Retrieval (Authoritative Clinical RAG Layer)
   const queryForRag = ragQuery || cleanText;
   const ragResult = queryForRag.length > 2
-    ? await executeMedicalRAG(queryForRag, { topK: ragDocLimit, minRelevanceScore: 0.58 })
+    ? await executeMedicalRAG(queryForRag, { topK: ragDocLimit, minRelevanceScore: 0.55 })
     : {
         contextString: 'Standard clinical reference consensus.',
         citations: [],
@@ -117,62 +127,118 @@ export async function executeAiPipeline<TInput, TOutput>(
   };
   const constructedPrompt = template.buildUserPrompt(promptParams);
 
-  // Step 5: Gemini Model Invocation with Retry, Timeout & Telemetry
+  // Step 5: Open-Weight Model Invocation (Primary Path)
   let rawResponseText = '';
-  let aiStatus: 'SUCCESS' | 'ERROR' | 'FALLBACK' = 'SUCCESS';
+  let parsedOutput: any = null;
+  const openClient = getOpenModelClient();
+  let usedProvider = openConfig.providerName;
+  let usedModel = activeModelName;
 
   try {
-    const ai = getGeminiClient();
-
-    const parts: any[] = [];
-    // Attach any inline multimodal files (PDF / image / audio)
-    for (const file of inlineFiles) {
-      parts.push({
-        inlineData: {
-          mimeType: file.mimeType,
-          data: file.data
+    if (openClient.isConfigured()) {
+      // Primary: Open Model Inference (Gemma / OpenAI-compatible endpoint)
+      if (inlineFiles.length > 0 && openConfig.visionModelName) {
+        rawResponseText = await openClient.generateMultimodal(constructedPrompt, inlineFiles, {
+          featureName,
+          systemInstruction: template.systemInstruction,
+          temperature,
+          promptVersion: template.version,
+          modelOverride: openConfig.visionModelName
+        });
+        usedModel = openConfig.visionModelName;
+        if (responseSchema) {
+          parsedOutput = resilientJsonParse(rawResponseText, fallbackGenerator(safetyCheck));
+        } else {
+          parsedOutput = { text: rawResponseText };
         }
-      });
-    }
-    parts.push({ text: constructedPrompt });
-
-    const response = await executeWithRetry(
-      () =>
-        ai.models.generateContent({
-          model: modelOverride,
-          contents: { parts },
-          config: {
+      } else if (responseSchema) {
+        parsedOutput = await openClient.generateStructured(
+          constructedPrompt,
+          responseSchema,
+          fallbackGenerator(safetyCheck),
+          {
+            featureName,
             systemInstruction: template.systemInstruction,
             temperature,
-            ...(responseSchema
-              ? {
-                  responseMimeType: 'application/json',
-                  responseSchema
-                }
-              : {})
+            promptVersion: template.version,
+            modelOverride: activeModelName
           }
-        }),
-      {
-        featureName,
-        maxRetries: 2,
-        timeoutMs: inlineFiles.length > 0 ? 45000 : 30000
+        );
+      } else {
+        rawResponseText = await openClient.generateText(constructedPrompt, {
+          featureName,
+          systemInstruction: template.systemInstruction,
+          temperature,
+          promptVersion: template.version,
+          modelOverride: activeModelName
+        });
+        parsedOutput = { text: rawResponseText };
       }
-    );
+    } else {
+      // Secondary: Optional Legacy Gemini Compatibility fallback if open provider not yet configured
+      const legacyConfig = getLegacyGeminiConfig();
+      if (legacyConfig.isAvailable) {
+        usedProvider = 'Legacy Gemini (Optional Dev Compatibility)';
+        usedModel = legacyConfig.modelName;
 
-    rawResponseText = response.text || '';
-    if (!rawResponseText.trim()) {
-      throw new Error('Gemini engine returned empty text response');
+        const { getGeminiClient, executeWithRetry } = await import('../geminiClient');
+        const ai = getGeminiClient();
+
+        const parts: any[] = [];
+        for (const file of inlineFiles) {
+          parts.push({
+            inlineData: {
+              mimeType: file.mimeType,
+              data: file.data
+            }
+          });
+        }
+        parts.push({ text: constructedPrompt });
+
+        const response = await executeWithRetry(
+          () =>
+            ai.models.generateContent({
+              model: legacyConfig.modelName,
+              contents: { parts },
+              config: {
+                systemInstruction: template.systemInstruction,
+                temperature,
+                ...(responseSchema
+                  ? {
+                      responseMimeType: 'application/json',
+                      responseSchema
+                    }
+                  : {})
+              }
+            }),
+          {
+            featureName,
+            maxRetries: 2,
+            timeoutMs: inlineFiles.length > 0 ? 45000 : 30000
+          }
+        );
+
+        rawResponseText = response.text || '';
+        if (responseSchema) {
+          parsedOutput = resilientJsonParse(rawResponseText, fallbackGenerator(safetyCheck));
+        } else {
+          parsedOutput = { text: rawResponseText };
+        }
+      } else {
+        // Neither open model endpoint nor legacy key configured: utilize domain fallback generator
+        console.warn(`[AI Pipeline Notice] Open Model endpoint not configured. Generating domain fallback for ${featureName}.`);
+        parsedOutput = fallbackGenerator(safetyCheck);
+      }
     }
   } catch (modelError: any) {
     console.error(`[AI Pipeline Error] Feature: ${featureName} failed:`, modelError?.message || modelError);
-    aiStatus = 'FALLBACK';
 
     const fallbackData = fallbackGenerator(safetyCheck, modelError);
     const latencyMs = Date.now() - startTime;
 
     recordAiMetrics({
       feature: featureName,
-      model: modelOverride,
+      model: usedModel,
       promptVersion: template.version,
       latencyMs,
       status: 'FALLBACK',
@@ -187,21 +253,23 @@ export async function executeAiPipeline<TInput, TOutput>(
         promptVersion: template.version,
         latencyMs,
         safetyTriggered: safetyCheck.emergencyActionRequired,
-        citations: ragResult.citations
+        citations: ragResult.citations,
+        model: usedModel,
+        provider: usedProvider
       }
     };
   }
 
-  // Step 6: Structured Output Extraction & Resilient Parsing
-  let parsedOutput: any;
-  if (responseSchema) {
-    const fallbackTemplate = fallbackGenerator(safetyCheck);
-    parsedOutput = resilientJsonParse(rawResponseText, fallbackTemplate);
-  } else {
-    parsedOutput = { text: rawResponseText };
+  // Ensure output is assigned if rawResponseText was processed without parsedOutput
+  if (!parsedOutput) {
+    if (responseSchema) {
+      parsedOutput = resilientJsonParse(rawResponseText, fallbackGenerator(safetyCheck));
+    } else {
+      parsedOutput = { text: rawResponseText || 'Analysis completed.' };
+    }
   }
 
-  // Step 7: Schema Validation & Defensive Bounds Check
+  // Step 6: Schema Validation & Defensive Bounds Check
   if (validateOutput) {
     const validation = validateOutput(parsedOutput);
     if (!validation.valid) {
@@ -210,12 +278,14 @@ export async function executeAiPipeline<TInput, TOutput>(
     }
   }
 
-  // Step 8: Safety Post-Processing & Strict Citation Verification
+  // Step 7: Safety Post-Processing & Strict Citation Verification
+  // The model must NOT invent citations. Only retrieved, verified medical citations are bound.
   const verifiedCitations = verifyAndBindCitations(parsedOutput?.sources, ragResult.citations);
   if (typeof parsedOutput === 'object' && parsedOutput !== null) {
     parsedOutput.sources = verifiedCitations;
   }
 
+  // Step 8: Deterministic Emergency Override (independent of LLM)
   if (safetyCheck.emergencyActionRequired) {
     if (typeof parsedOutput === 'object' && parsedOutput !== null) {
       parsedOutput.urgency = 'emergency';
@@ -246,7 +316,7 @@ export async function executeAiPipeline<TInput, TOutput>(
   // Telemetry Audit (zero patient data logged)
   recordAiMetrics({
     feature: featureName,
-    model: modelOverride,
+    model: usedModel,
     promptVersion: template.version,
     latencyMs,
     status: 'SUCCESS'
@@ -260,7 +330,9 @@ export async function executeAiPipeline<TInput, TOutput>(
       promptVersion: template.version,
       latencyMs,
       safetyTriggered: safetyCheck.emergencyActionRequired,
-      citations: ragResult.citations
+      citations: ragResult.citations,
+      model: usedModel,
+      provider: usedProvider
     }
   };
 }

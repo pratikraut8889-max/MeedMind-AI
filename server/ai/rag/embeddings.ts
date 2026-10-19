@@ -3,8 +3,6 @@
  * Supports Gemini embedding API with graceful fallback to dense medical vectorization.
  */
 
-import { getGeminiClient } from '../geminiClient';
-
 export const EMBEDDING_DIMENSION = 256;
 
 /**
@@ -97,9 +95,18 @@ export function generateDenseSemanticVector(text: string, dim = EMBEDDING_DIMENS
   return normalizedVector;
 }
 
+import { getOpenModelClient } from '../openModelClient';
+import { getLegacyGeminiConfig } from '../modelConfig';
+
 /**
- * Generates an embedding for text. Attempts Gemini Embedding API when available,
- * falling back reliably to the dense semantic vectorizer.
+ * Generates an embedding for text.
+ * 
+ * Hacktoberfest 2026: Open-source / open-weight RAG architecture.
+ * Priority 1: Configured OPEN_MODEL_EMBEDDING_MODEL via OpenAI-compatible endpoint.
+ * Priority 2: Deterministic 256-dim Dense Semantic Vectorizer (guaranteed local fallback).
+ * 
+ * Vector comparison (cosine similarity) remains fully compatible and resilient even when
+ * offline or when external embedding providers are not configured.
  */
 export async function getEmbedding(text: string): Promise<number[]> {
   const clean = text.trim();
@@ -107,20 +114,37 @@ export async function getEmbedding(text: string): Promise<number[]> {
     return new Array(EMBEDDING_DIMENSION).fill(0);
   }
 
+  // 1. Primary Path: Open Model Embedding via provider abstraction
   try {
-    const ai = getGeminiClient();
-    // @google/genai embedding call
-    const result: any = await (ai.models as any).embedContent({
-      model: 'gemini-embedding-2-preview',
-      contents: clean
-    });
-
-    if (result && result.embedding && Array.isArray(result.embedding.values)) {
-      return result.embedding.values;
+    const openClient = getOpenModelClient();
+    if (openClient.isConfigured()) {
+      const openVec = await openClient.embedText(clean);
+      if (openVec && openVec.length > 0) {
+        return openVec;
+      }
     }
-  } catch (err) {
-    // API not configured, offline, or rate-limited; fallback seamlessly
+  } catch {
+    // Graceful fallback to deterministic vectorizer below
   }
 
+  // 2. Optional / Legacy Development Compatibility (only if explicitly enabled)
+  const legacyConfig = getLegacyGeminiConfig();
+  if (process.env.ENABLE_LEGACY_GEMINI_EMBEDDINGS === 'true' && legacyConfig.isAvailable) {
+    try {
+      const { getGeminiClient } = await import('../geminiClient');
+      const ai = getGeminiClient();
+      const result: any = await (ai.models as any).embedContent({
+        model: 'gemini-embedding-2-preview',
+        contents: clean
+      });
+      if (result && result.embedding && Array.isArray(result.embedding.values)) {
+        return result.embedding.values;
+      }
+    } catch {
+      // Fall through to local fallback
+    }
+  }
+
+  // 3. Guaranteed Deterministic Fallback: 256-dim dense semantic vector
   return generateDenseSemanticVector(clean);
 }

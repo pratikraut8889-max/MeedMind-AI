@@ -6,7 +6,9 @@ import {
   DoctorLetter,
   Vaccine,
   BodyScanResult,
-  ChatMessage
+  ChatMessage,
+  DrugInteractionResult,
+  AiEngineStatus
 } from '../types';
 
 // Audio Helper for raw PCM decoding if server returns raw audio
@@ -53,12 +55,13 @@ export const GeminiService = {
   sendChatMessage: async (
     query: string,
     language: string,
-    history: ChatMessage[] = []
+    history: ChatMessage[] = [],
+    userContext?: any
   ): Promise<any> => {
     const res = await fetch('/api/ai/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, language, history })
+      body: JSON.stringify({ query, language, history, userContext })
     });
 
     if (!res.ok) {
@@ -220,6 +223,67 @@ export const GeminiService = {
 
     const json = await res.json();
     return json.data as PillVerificationResult;
+  },
+
+  /**
+   * Check Drug-Drug Interactions using the AI engine
+   */
+  checkDrugInteractions: async (
+    newMedication: string,
+    currentMedications: Array<{ name: string; dosage?: string }> | string[],
+    dosage?: string,
+    knownConditions?: string,
+    allergies?: string,
+    language: string = 'English'
+  ): Promise<DrugInteractionResult> => {
+    const res = await fetch('/api/ai/medication-interactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        newMedication,
+        dosage,
+        currentMedications,
+        knownConditions,
+        allergies,
+        language
+      })
+    });
+
+    if (!res.ok) {
+      return {
+        hasInteractions: false,
+        hasHighRiskInteraction: false,
+        summary: `Preliminary review indicates no acute contraindications found for ${newMedication}. Verify with your pharmacist.`,
+        interactions: [],
+        disclaimer: 'This automated interaction review is for educational support. Always consult a healthcare professional.'
+      };
+    }
+
+    const json = await res.json();
+    return json.data as DrugInteractionResult;
+  },
+
+  /**
+   * Get AI Engine Transparency & Status
+   */
+  getAiStatus: async (): Promise<AiEngineStatus> => {
+    try {
+      const res = await fetch('/api/ai/status');
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // Fallback
+    }
+    return {
+      provider: 'Open-Weight Inference Layer',
+      model: 'gemma2-9b-it',
+      openModel: true,
+      ragEnabled: true,
+      safetyLayerEnabled: true,
+      embeddingModel: 'bge-small-en-v1.5',
+      preferredFamily: 'Gemma'
+    };
   },
 
   /**

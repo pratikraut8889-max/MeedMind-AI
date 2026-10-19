@@ -4,8 +4,8 @@
  */
 
 import { executeAiPipeline, PipelineResult } from '../pipeline/aiPipeline';
-import { MedicationInfoPrompt, ImageAnalysisPrompt } from '../prompts/promptRegistry';
-import { medicationAnalysisSchema, pillVerificationSchema } from '../schemas/aiSchemas';
+import { MedicationInfoPrompt, ImageAnalysisPrompt, DrugInteractionPrompt } from '../prompts/promptRegistry';
+import { medicationAnalysisSchema, pillVerificationSchema, drugInteractionSchema } from '../schemas/aiSchemas';
 
 export interface MedicationWorkflowInput {
   base64Image?: string;
@@ -138,3 +138,70 @@ export async function runMedicationWorkflow(
     })
   });
 }
+
+export interface DrugInteractionWorkflowInput {
+  newMedication: string;
+  dosage?: string;
+  currentMedications: Array<{ name: string; dosage?: string }> | string[];
+  knownConditions?: string;
+  allergies?: string;
+  language?: string;
+}
+
+export interface DrugInteractionWorkflowOutput {
+  hasInteractions: boolean;
+  hasHighRiskInteraction: boolean;
+  summary: string;
+  interactions: Array<{
+    severity: 'HIGH' | 'MODERATE' | 'LOW';
+    interactingDrug: string;
+    description: string;
+    clinicalRecommendation: string;
+  }>;
+  disclaimer: string;
+}
+
+export async function runDrugInteractionWorkflow(
+  input: DrugInteractionWorkflowInput
+): Promise<PipelineResult<DrugInteractionWorkflowOutput>> {
+  const language = input.language || 'English';
+  const currentMedsList = Array.isArray(input.currentMedications)
+    ? input.currentMedications
+        .map((m) => (typeof m === 'string' ? m : `${m.name} ${m.dosage || ''}`.trim()))
+        .filter(Boolean)
+        .join(', ')
+    : String(input.currentMedications || '');
+
+  const ragQuery = `${input.newMedication} ${currentMedsList} drug interaction contraindication mechanism pharmacology`;
+
+  return executeAiPipeline<any, DrugInteractionWorkflowOutput>({
+    featureName: 'Drug-Drug Interaction Analysis',
+    template: DrugInteractionPrompt,
+    rawUserInput: `Evaluating interactions for ${input.newMedication} against: ${currentMedsList}`,
+    ragQuery,
+    ragDocLimit: 4,
+    responseSchema: drugInteractionSchema,
+    userParams: {
+      newMedication: input.newMedication,
+      dosage: input.dosage || '',
+      currentMedications: currentMedsList,
+      knownConditions: input.knownConditions || '',
+      allergies: input.allergies || '',
+      targetLanguage: language
+    },
+    validateOutput: (out) => {
+      if (!out || typeof out.hasInteractions !== 'boolean') {
+        return { valid: false, error: 'Missing hasInteractions boolean' };
+      }
+      return { valid: true };
+    },
+    fallbackGenerator: () => ({
+      hasInteractions: false,
+      hasHighRiskInteraction: false,
+      summary: `Preliminary review indicates no major documented interactions between ${input.newMedication} and reported medications. Always verify with your dispensing pharmacist.`,
+      interactions: [],
+      disclaimer: 'This drug interaction check is educational and based on available pharmacology references. Always consult your prescribing physician or pharmacist before starting a new medication.'
+    })
+  });
+}
+

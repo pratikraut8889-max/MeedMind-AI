@@ -183,3 +183,31 @@ export const pillVerificationSchema: Schema = {
   required: ['shape', 'color', 'description']
 };
 
+/**
+ * Drug-Drug Interaction Safety Schema.
+ */
+export const drugInteractionSchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    hasInteractions: { type: Type.BOOLEAN, description: 'True if any interactions were found.' },
+    hasHighRiskInteraction: { type: Type.BOOLEAN, description: 'True if any HIGH severity interaction exists.' },
+    summary: { type: Type.STRING, description: 'Concise, clear 1-2 sentence overall interaction summary.' },
+    interactions: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          severity: { type: Type.STRING, enum: ['HIGH', 'MODERATE', 'LOW'] },
+          interactingDrug: { type: Type.STRING, description: 'Name of the conflicting medication.' },
+          description: { type: Type.STRING, description: 'Mechanism and clinical risk of combining the drugs.' },
+          clinicalRecommendation: { type: Type.STRING, description: 'Actionable guidance (e.g. spacing, monitoring, or doctor consultation).' }
+        },
+        required: ['severity', 'interactingDrug', 'description', 'clinicalRecommendation']
+      }
+    },
+    disclaimer: { type: Type.STRING }
+  },
+  required: ['hasInteractions', 'hasHighRiskInteraction', 'summary', 'interactions']
+};
+
+

@@ -12,7 +12,20 @@ export interface ChatWorkflowInput {
   query: string;
   language?: string;
   history?: Array<{ role: string; content: string }>;
-  userContext?: { currentMeds?: string; knownConditions?: string };
+  userContext?: {
+    currentMeds?: string;
+    knownConditions?: string;
+    careProfile?: {
+      name?: string;
+      relationship?: string;
+      ageRange?: string;
+      healthGoals?: string;
+      knownConditions?: string;
+      allergies?: string;
+      currentMedications?: string;
+      careNotes?: string;
+    };
+  };
 }
 
 export interface ChatWorkflowOutput {

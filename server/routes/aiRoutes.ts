@@ -1,13 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { Modality } from '@google/genai';
 import { getGeminiClient, AI_MODELS, getRecentAiMetrics } from '../ai/geminiClient';
+import { getOpenModelConfig, getLegacyGeminiConfig } from '../ai/modelConfig';
 import { sanitizeUserInput } from '../ai/safety/sanitizer';
 import { validateBase64Upload } from '../middleware/fileUploadValidator';
 import { createRateLimiter } from '../middleware/rateLimiter';
 import { runChatWorkflow } from '../ai/workflows/chatWorkflow';
 import { runReportAnalysisWorkflow } from '../ai/workflows/reportAnalysisWorkflow';
 import { runSymptomAnalysisWorkflow } from '../ai/workflows/symptomAnalysisWorkflow';
-import { runMedicationWorkflow, runPillVerificationWorkflow } from '../ai/workflows/medicationWorkflow';
+import { runMedicationWorkflow, runPillVerificationWorkflow, runDrugInteractionWorkflow } from '../ai/workflows/medicationWorkflow';
 import { runEmergencyTriageWorkflow } from '../ai/workflows/emergencyTriageWorkflow';
 import { runDoctorLetterWorkflow } from '../ai/workflows/doctorLetterWorkflow';
 import { runBodyScanWorkflow, runVaccineCardWorkflow } from '../ai/workflows/imageAnalysisWorkflow';
@@ -27,6 +28,24 @@ export const aiRouter = Router();
 // Rate limits: Chat allows 40 req/min, file analysis allows 20 req/min
 const chatLimiter = createRateLimiter({ windowMs: 60000, max: 40, message: 'Chat rate limit reached. Please wait a moment.' });
 const uploadLimiter = createRateLimiter({ windowMs: 60000, max: 20, message: 'Analysis rate limit reached. Please wait a moment before uploading more documents.' });
+
+/**
+ * 0. AI Engine Transparency & Status (Goal 15)
+ * GET /api/ai/status
+ * Returns safe non-secret model, provider, and RAG configuration details.
+ */
+aiRouter.get('/status', (_req: Request, res: Response): void => {
+  const config = getOpenModelConfig();
+  res.status(200).json({
+    provider: config.providerName,
+    model: config.modelName,
+    openModel: true,
+    ragEnabled: true,
+    safetyLayerEnabled: true,
+    embeddingModel: config.embeddingModelName,
+    preferredFamily: config.preferredFamily
+  });
+});
 
 /**
  * 1. AI Health Assistant Chat (Workflow 1)
@@ -279,6 +298,41 @@ aiRouter.post('/pill-verify', uploadLimiter, async (req: Request, res: Response)
     res.status(500).json({
       error: 'PILL_VERIFICATION_ERROR',
       message: 'Could not visually verify the physical pill. Please ensure good lighting and clear camera focus.'
+    });
+  }
+});
+
+/**
+ * 5c. Drug-Drug Interaction Safety Verification
+ * POST /api/ai/medication-interactions
+ */
+aiRouter.post('/medication-interactions', chatLimiter, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { newMedication, dosage, currentMedications = [], knownConditions, allergies, language = 'English' } = req.body;
+
+    if (!newMedication || typeof newMedication !== 'string') {
+      res.status(400).json({ error: 'MISSING_MEDICATION', message: 'newMedication name is required.' });
+      return;
+    }
+
+    const result = await runDrugInteractionWorkflow({
+      newMedication,
+      dosage,
+      currentMedications,
+      knownConditions,
+      allergies,
+      language
+    });
+
+    res.status(200).json({
+      success: true,
+      data: result.data
+    });
+  } catch (error: any) {
+    console.error('[Medication Interactions Route Error]', error?.message || error);
+    res.status(500).json({
+      error: 'INTERACTION_CHECK_ERROR',
+      message: 'Could not complete drug interaction check. Please consult your physician or pharmacist.'
     });
   }
 });

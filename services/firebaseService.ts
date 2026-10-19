@@ -21,7 +21,7 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
-import { Medication, MoodEntry, StoredReport, Vaccine, HealthHistory, SymptomEntry } from '../types';
+import { Medication, MoodEntry, StoredReport, Vaccine, HealthHistory, SymptomEntry, CareProfile } from '../types';
 
 // Google Auth Provider setup
 const googleProvider = new GoogleAuthProvider();
@@ -339,5 +339,39 @@ export const FirebaseService = {
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
     }
+  },
+
+  // Care Profile ("Build for a Friend" personalization)
+  subscribeCareProfile(userId: string, callback: (profile: CareProfile | null) => void) {
+    const path = `users/${userId}/careProfile/main`;
+    return onSnapshot(doc(db, 'users', userId, 'careProfile', 'main'), (snap) => {
+      callback(snap.exists() ? (snap.data() as CareProfile) : null);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
+    });
+  },
+
+  async saveCareProfile(userId: string, profile: CareProfile) {
+    const path = `users/${userId}/careProfile/main`;
+    try {
+      await setDoc(doc(db, 'users', userId, 'careProfile', 'main'), {
+        ...profile,
+        updatedAt: Date.now()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
+  },
+
+  async getCareProfile(userId: string): Promise<CareProfile | null> {
+    const path = `users/${userId}/careProfile/main`;
+    try {
+      const snap = await getDoc(doc(db, 'users', userId, 'careProfile', 'main'));
+      return snap.exists() ? (snap.data() as CareProfile) : null;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, path);
+      return null;
+    }
   }
 };
+

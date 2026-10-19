@@ -15,7 +15,9 @@ import {
   BodyScanResult,
   EmergencyContact,
   HealthMetricEntry,
-  SymptomEntry
+  SymptomEntry,
+  CareProfile,
+  DrugInteractionResult
 } from './types';
 import { GeminiService } from './services/geminiService';
 import { auth } from './services/firebase';
@@ -30,6 +32,9 @@ import { AiHealthChat } from './components/AiHealthChat';
 import { SavedReportsView } from './components/SavedReportsView';
 import { PrivacyPolicyView } from './components/PrivacyPolicyView';
 import { SymptomJournal } from './components/SymptomJournal';
+import { CareProfileModal } from './components/CareProfileModal';
+import { CareProfileSection } from './components/CareProfileSection';
+import { OpenAiTransparencyModal } from './components/OpenAiTransparencyModal';
 
 // Production SaaS UI Components
 import {
@@ -968,7 +973,9 @@ const AddMedication = ({
   onSave,
   language,
   highContrast,
-  darkMode
+  darkMode,
+  existingMedications = [],
+  careProfile = null
 }: any) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -992,6 +999,11 @@ const AddMedication = ({
     safetyNotes?: string;
   } | null>(null);
 
+  // Drug-Drug Interaction Warning State
+  const [interactionResult, setInteractionResult] = useState<DrugInteractionResult | null>(null);
+  const [isCheckingInteractions, setIsCheckingInteractions] = useState(false);
+  const [hasAcknowledgedWarning, setHasAcknowledgedWarning] = useState(false);
+
   // Form Data
   const [form, setForm] = useState<Partial<Medication>>({
     time: '09:00',
@@ -1004,6 +1016,30 @@ const AddMedication = ({
     pillShape: '',
     pillImprint: ''
   });
+
+  const checkInteractionsFor = async (medName: string, dosage?: string) => {
+    if (!medName || medName.trim().length < 2 || !existingMedications || existingMedications.length === 0) {
+      setInteractionResult(null);
+      return;
+    }
+    setIsCheckingInteractions(true);
+    setHasAcknowledgedWarning(false);
+    try {
+      const res = await GeminiService.checkDrugInteractions(
+        medName.trim(),
+        existingMedications.map((m: any) => ({ name: m.name, dosage: m.dosage })),
+        dosage || form.dosage,
+        careProfile?.knownConditions,
+        careProfile?.allergies,
+        language
+      );
+      setInteractionResult(res);
+    } catch (err) {
+      console.error('Drug interaction check failed:', err);
+    } finally {
+      setIsCheckingInteractions(false);
+    }
+  };
 
   const isCameraActive =
     (activeCaptureTab === 'label' && !capturedLabelImage) ||
@@ -1109,6 +1145,9 @@ const AddMedication = ({
         frequency: res.frequency || prev.frequency,
         instructions: res.instructions || prev.instructions
       }));
+      if (res.name) {
+        checkInteractionsFor(res.name, res.dosage);
+      }
     } catch (e) {
       console.error(e);
       alert('Could not parse medication label. You can enter or adjust the details manually.');
@@ -1418,13 +1457,37 @@ const AddMedication = ({
 
           <div className="space-y-3">
             <div>
-              <label className="text-xs font-bold text-slate-500 block mb-1">Medication Name</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-bold text-slate-500 block">Medication Name</label>
+                {existingMedications.length > 0 && form.name?.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => checkInteractionsFor(form.name || '', form.dosage)}
+                    disabled={isCheckingInteractions}
+                    className="text-[10px] text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1"
+                  >
+                    <i className={`fas ${isCheckingInteractions ? 'fa-spinner fa-spin' : 'fa-capsules'}`}></i>
+                    <span>{isCheckingInteractions ? 'Checking...' : 'Check Interactions'}</span>
+                  </button>
+                )}
+              </div>
               <input
                 type="text"
                 id="med-name-input"
                 placeholder="e.g. Lisinopril, Metformin, Atorvastatin"
                 value={form.name || ''}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, name: e.target.value });
+                  if (interactionResult) {
+                    setInteractionResult(null);
+                    setHasAcknowledgedWarning(false);
+                  }
+                }}
+                onBlur={() => {
+                  if (form.name && form.name.trim().length >= 2) {
+                    checkInteractionsFor(form.name, form.dosage);
+                  }
+                }}
                 className={`w-full p-2.5 rounded-xl border text-xs outline-none ${
                   darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200'
                 }`}
@@ -1598,7 +1661,133 @@ const AddMedication = ({
                 </div>
               </div>
             </div>
+
+            {/* Drug-Drug Interaction Warning System */}
+            {existingMedications.length > 0 && (
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <i className="fas fa-capsules text-amber-500"></i>
+                    <span>Drug-Drug Interaction Safety Review</span>
+                  </label>
+                  {form.name?.trim() && (
+                    <button
+                      type="button"
+                      id="check-interactions-btn"
+                      disabled={isCheckingInteractions}
+                      onClick={() => checkInteractionsFor(form.name || '', form.dosage)}
+                      className="text-[11px] text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1"
+                    >
+                      <i className={`fas ${isCheckingInteractions ? 'fa-spinner fa-spin' : 'fa-rotate'}`}></i>
+                      <span>{isCheckingInteractions ? 'Checking...' : 'Recheck Interactions'}</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* If checking */}
+                {isCheckingInteractions && (
+                  <div className="p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 flex items-center gap-2.5 text-xs text-blue-800 dark:text-blue-300">
+                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0"></div>
+                    <span>Checking known drug-drug interactions against your {existingMedications.length} active medication(s)...</span>
+                  </div>
+                )}
+
+                {/* Interaction Result Display */}
+                {!isCheckingInteractions && interactionResult && (
+                  <div className="space-y-2 animate-fade-in">
+                    {interactionResult.hasInteractions ? (
+                      <div
+                        id="drug-interaction-warning-card"
+                        className={`p-3.5 rounded-2xl border ${
+                          interactionResult.hasHighRiskInteraction
+                            ? 'bg-rose-50/90 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-rose-950 dark:text-rose-100'
+                            : 'bg-amber-50/90 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-950 dark:text-amber-100'
+                        } space-y-2.5 shadow-sm`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <i className={`fas ${interactionResult.hasHighRiskInteraction ? 'fa-triangle-exclamation text-rose-600 animate-pulse' : 'fa-exclamation-triangle text-amber-600'} text-base`}></i>
+                            <h4 className="font-bold text-xs">
+                              {interactionResult.hasHighRiskInteraction
+                                ? 'Critical Drug Interaction Warning'
+                                : 'Potential Drug Interaction Warning'}
+                            </h4>
+                          </div>
+                          <Badge tone={interactionResult.hasHighRiskInteraction ? 'danger' : 'warning'}>
+                            {interactionResult.hasHighRiskInteraction ? 'HIGH RISK' : 'MODERATE RISK'}
+                          </Badge>
+                        </div>
+
+                        <p className="text-[11px] leading-relaxed">
+                          {interactionResult.summary}
+                        </p>
+
+                        {/* List of Interactions */}
+                        <div className="space-y-2 pt-1">
+                          {interactionResult.interactions.map((interaction, idx) => (
+                            <div
+                              key={idx}
+                              className="p-2.5 rounded-xl bg-white/70 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800 text-[11px] space-y-1"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                                  <i className="fas fa-link text-slate-400 text-[10px]"></i>
+                                  Interacting: {interaction.interactingDrug}
+                                </span>
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                  interaction.severity === 'HIGH'
+                                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                    : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                                }`}>
+                                  {interaction.severity}
+                                </span>
+                              </div>
+                              <p className="text-slate-600 dark:text-slate-300">{interaction.description}</p>
+                              <p className="text-slate-700 dark:text-slate-200 font-medium">
+                                <strong>Clinical Recommendation:</strong> {interaction.clinicalRecommendation}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* High-risk confirmation checkbox */}
+                        {interactionResult.hasHighRiskInteraction && (
+                          <label className="flex items-start gap-2 pt-2 border-t border-rose-200 dark:border-rose-800 cursor-pointer text-[11px] font-medium text-rose-900 dark:text-rose-200">
+                            <input
+                              type="checkbox"
+                              id="acknowledge-interaction-check"
+                              checked={hasAcknowledgedWarning}
+                              onChange={(e) => setHasAcknowledgedWarning(e.target.checked)}
+                              className="mt-0.5 rounded text-rose-600 focus:ring-rose-500"
+                            />
+                            <span>
+                              I have reviewed this high-risk drug interaction warning and will verify with my physician or pharmacist before taking these together.
+                            </span>
+                          </label>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 flex items-center gap-2.5 text-xs text-emerald-800 dark:text-emerald-300">
+                        <i className="fas fa-shield-check text-emerald-600 text-sm shrink-0"></i>
+                        <div>
+                          <p className="font-bold">No Known Severe Interactions</p>
+                          <p className="text-[11px] opacity-80">
+                            Checked against active medications: {existingMedications.map((m: any) => m.name).join(', ')}.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
+          {interactionResult?.hasHighRiskInteraction && !hasAcknowledgedWarning && (
+            <p className="text-[11px] text-rose-600 dark:text-rose-400 font-semibold text-center animate-pulse">
+              Please review and acknowledge the high-risk drug interaction warning above to save.
+            </p>
+          )}
 
           <div className="flex gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
             <Button variant="secondary" onClick={onCancel} className="flex-1">
@@ -1607,7 +1796,7 @@ const AddMedication = ({
             <Button
               variant="primary"
               id="save-medication-btn"
-              disabled={!form.name?.trim()}
+              disabled={!form.name?.trim() || (interactionResult?.hasHighRiskInteraction && !hasAcknowledgedWarning)}
               onClick={() =>
                 onSave({
                   id: Date.now().toString(),
@@ -1653,6 +1842,18 @@ function MediMindAppContent() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showWellnessModal, setShowWellnessModal] = useState(false);
+  const [showCareProfileModal, setShowCareProfileModal] = useState(false);
+  const [showOpenAiModal, setShowOpenAiModal] = useState(false);
+
+  // Care Profile ("Build for a Friend" personalization)
+  const [careProfile, setCareProfile] = useState<CareProfile | null>(() => {
+    try {
+      const saved = localStorage.getItem('medimind_care_profile');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
   // User Auth & Persistence
   const [user, setUser] = useState<User | null>(null);
@@ -2429,15 +2630,21 @@ function MediMindAppContent() {
                 medications={medications}
                 patientName={user?.displayName || user?.email?.split('@')[0] || ''}
                 onAdd={() => setMode(AppMode.ADD_MEDICATION)}
-                onTake={async (id: string) => {
+                onTake={async (id: string, customTime?: string) => {
                   const today = new Date().toISOString().split('T')[0];
+                  const timeStr =
+                    customTime ||
+                    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                   setMedications(
                     medications.map((m) =>
-                      m.id === id ? { ...m, lastTakenDate: today } : m
+                      m.id === id ? { ...m, lastTakenDate: today, lastTakenTime: timeStr } : m
                     )
                   );
                   if (user) {
-                    await FirebaseService.updateMedication(user.uid, id, { lastTakenDate: today });
+                    await FirebaseService.updateMedication(user.uid, id, {
+                      lastTakenDate: today,
+                      lastTakenTime: timeStr
+                    });
                   }
                 }}
                 onDelete={async (id: string) => {

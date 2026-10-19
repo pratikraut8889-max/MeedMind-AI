@@ -50,6 +50,7 @@ service cloud.firestore {
         && data.time is string && data.time.size() == 5 && data.time.matches('^[0-9]{2}:[0-9]{2}$')
         && data.instructions is string && data.instructions.size() <= 500
         && (data.lastTakenDate == null || (data.lastTakenDate is string && data.lastTakenDate.size() <= 10))
+        && (data.lastTakenTime == null || (data.lastTakenTime is string && data.lastTakenTime.size() <= 30))
         && (data.lastNotificationDate == null || (data.lastNotificationDate is string && data.lastNotificationDate.size() <= 10))
         && (data.pillAppearance == null || (data.pillAppearance is string && data.pillAppearance.size() <= 300))
         && (data.pillColor == null || (data.pillColor is string && data.pillColor.size() <= 50))
@@ -101,6 +102,17 @@ service cloud.firestore {
         && (data.triggers == null || (data.triggers is string && data.triggers.size() <= 300))
         && (data.notes == null || (data.notes is string && data.notes.size() <= 500))
         && (data.createdAt == null || data.createdAt is int);
+    function isValidCareProfile(data) {
+      return data.name is string && data.name.size() <= 100
+        && data.relationship is string && data.relationship.size() <= 100
+        && (data.ageRange == null || (data.ageRange is string && data.ageRange.size() <= 50))
+        && (data.healthGoals == null || (data.healthGoals is string && data.healthGoals.size() <= 1000))
+        && (data.knownConditions == null || (data.knownConditions is string && data.knownConditions.size() <= 1000))
+        && (data.allergies == null || (data.allergies is string && data.allergies.size() <= 500))
+        && (data.currentMedications == null || (data.currentMedications is string && data.currentMedications.size() <= 1000))
+        && (data.preferredLanguage == null || (data.preferredLanguage is string && data.preferredLanguage.size() <= 50))
+        && (data.careNotes == null || (data.careNotes is string && data.careNotes.size() <= 1500))
+        && (data.updatedAt == null || data.updatedAt is int);
     }
 
     // Collection Security Rules
@@ -123,7 +135,7 @@ service cloud.firestore {
         allow create: if isOwner(userId) && isValidId(medicationId) && isValidMedication(incoming());
         allow update: if isOwner(userId) && isValidId(medicationId) && isValidMedication(incoming())
           && (
-            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'dosage', 'frequency', 'time', 'instructions', 'lastTakenDate', 'lastNotificationDate', 'pillPhoto', 'pillAppearance', 'pillColor', 'pillShape', 'pillImprint'])
+            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'dosage', 'frequency', 'time', 'instructions', 'lastTakenDate', 'lastTakenTime', 'lastNotificationDate', 'pillPhoto', 'pillAppearance', 'pillColor', 'pillShape', 'pillImprint'])
           );
         allow delete: if isOwner(userId) && isValidId(medicationId);
       }
@@ -186,6 +198,15 @@ service cloud.firestore {
             incoming().diff(existing()).affectedKeys().hasOnly(['conditions', 'surgeries', 'familyHistory', 'allergies', 'bloodType', 'organDonor', 'emergencyContacts', 'metrics'])
           );
         allow delete: if isOwner(userId) && isValidId(historyId);
+      }
+
+      // Care Profile subcollection ("Build for a Friend" personalization - singleton 'main')
+      match /careProfile/{profileId} {
+        allow get: if isOwner(userId) && isValidId(profileId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(profileId) && isValidCareProfile(incoming());
+        allow update: if isOwner(userId) && isValidId(profileId) && isValidCareProfile(incoming());
+        allow delete: if isOwner(userId) && isValidId(profileId);
       }
     }
   }

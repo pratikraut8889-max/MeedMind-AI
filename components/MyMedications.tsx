@@ -7,7 +7,7 @@ import { PDFExportService } from '../services/pdfExportService';
 interface MyMedicationsProps {
   medications: Medication[];
   onAdd: () => void;
-  onTake: (id: string) => void;
+  onTake: (id: string, time?: string) => void;
   onDelete?: (id: string) => void;
   highContrast: boolean;
   darkMode: boolean;
@@ -36,6 +36,10 @@ export const MyMedications: React.FC<MyMedicationsProps> = ({
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [selectedPillPhoto, setSelectedPillPhoto] = useState<string | null>(null);
+
+  // Log Time Modal State
+  const [loggingTimeMed, setLoggingTimeMed] = useState<Medication | null>(null);
+  const [customTimeStr, setCustomTimeStr] = useState<string>('09:00');
 
   useEffect(() => {
     setPermission(MedicationAlarm.getPermission());
@@ -86,8 +90,35 @@ export const MyMedications: React.FC<MyMedicationsProps> = ({
     setActiveAlert(null);
   };
 
+  const handleMarkTakenNow = (medId: string) => {
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    onTake(medId, timeStr);
+    SoundService.playSuccessTone();
+    showToast(`Logged medication as taken at ${timeStr}`);
+  };
+
+  const handleSaveCustomTime = () => {
+    if (!loggingTimeMed) return;
+    // Format input (which is HH:MM 24h) to clean display time
+    let formatted = customTimeStr;
+    try {
+      const [h, m] = customTimeStr.split(':');
+      const date = new Date();
+      date.setHours(parseInt(h, 10));
+      date.setMinutes(parseInt(m, 10));
+      formatted = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      // Use raw input
+    }
+    onTake(loggingTimeMed.id, formatted);
+    SoundService.playSuccessTone();
+    showToast(`Logged medication as taken at ${formatted}`);
+    setLoggingTimeMed(null);
+  };
+
   const handleMarkTakenFromAlert = (medId: string) => {
-    onTake(medId);
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    onTake(medId, timeStr);
     SoundService.playSuccessTone();
     setActiveAlert(null);
   };
@@ -276,6 +307,109 @@ export const MyMedications: React.FC<MyMedicationsProps> = ({
               >
                 <i className={`fas ${isExportingPDF ? 'fa-spinner fa-spin' : 'fa-download'}`}></i>
                 <span>{isExportingPDF ? 'Generating PDF...' : 'Download Printable PDF'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Log Custom Taken Time Modal */}
+      {loggingTimeMed && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div
+            className={`w-full max-w-sm rounded-2xl p-5 shadow-2xl space-y-4 border ${
+              darkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
+            }`}
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center text-sm">
+                  <i className="fas fa-clock"></i>
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm">Log Taken Time</h3>
+                  <p className="text-[11px] text-slate-500">{loggingTimeMed.name} ({loggingTimeMed.dosage})</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLoggingTimeMed(null)}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <i className="fas fa-times text-xs"></i>
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block">
+                What time did you take this dose today?
+              </label>
+              <input
+                type="time"
+                id="custom-taken-time-input"
+                value={customTimeStr}
+                onChange={(e) => setCustomTimeStr(e.target.value)}
+                className={`w-full px-3 py-2.5 rounded-xl border text-sm font-mono font-bold outline-none text-center ${
+                  darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
+                }`}
+              />
+
+              {/* Quick Presets */}
+              <div className="flex items-center justify-center gap-1.5 flex-wrap pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const now = new Date();
+                    const hh = String(now.getHours()).padStart(2, '0');
+                    const mm = String(now.getMinutes()).padStart(2, '0');
+                    setCustomTimeStr(`${hh}:${mm}`);
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Right Now
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCustomTimeStr('08:00')}
+                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  8:00 AM
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCustomTimeStr('12:00')}
+                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  12:00 PM
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCustomTimeStr('18:00')}
+                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  6:00 PM
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setLoggingTimeMed(null)}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold border transition ${
+                  darkMode ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-700'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                id="save-custom-time-btn"
+                onClick={handleSaveCustomTime}
+                className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20"
+              >
+                <i className="fas fa-check"></i>
+                <span>Save Time</span>
               </button>
             </div>
           </div>
@@ -559,19 +693,58 @@ export const MyMedications: React.FC<MyMedicationsProps> = ({
                   </div>
 
                   {isTakenToday ? (
-                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                      <i className="fas fa-circle-check"></i> Taken Today
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span
+                        id={`taken-badge-${m.id}`}
+                        className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800/80 flex items-center gap-1.5 shadow-sm"
+                      >
+                        <i className="fas fa-circle-check text-emerald-600 dark:text-emerald-400"></i>
+                        <span>Taken Today • {m.lastTakenTime || 'Logged'}</span>
+                      </span>
+                      <button
+                        type="button"
+                        id={`edit-time-${m.id}`}
+                        onClick={() => {
+                          setLoggingTimeMed(m);
+                          const now = new Date();
+                          const hh = String(now.getHours()).padStart(2, '0');
+                          const mm = String(now.getMinutes()).padStart(2, '0');
+                          setCustomTimeStr(m.time || `${hh}:${mm}`);
+                        }}
+                        title="Adjust or edit logged time"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition text-[11px]"
+                      >
+                        <i className="fas fa-pen text-[10px]"></i>
+                      </button>
+                    </div>
                   ) : (
-                    <button
-                      onClick={() => {
-                        onTake(m.id);
-                        SoundService.playSuccessTone();
-                      }}
-                      className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1 transition active:scale-95 shadow-sm"
-                    >
-                      <i className="fas fa-check"></i> Mark Taken
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        id={`mark-taken-${m.id}`}
+                        onClick={() => handleMarkTakenNow(m.id)}
+                        className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 transition active:scale-95 shadow-sm"
+                      >
+                        <i className="fas fa-check"></i>
+                        <span>Mark Taken</span>
+                      </button>
+                      <button
+                        type="button"
+                        id={`log-time-btn-${m.id}`}
+                        onClick={() => {
+                          setLoggingTimeMed(m);
+                          const now = new Date();
+                          const hh = String(now.getHours()).padStart(2, '0');
+                          const mm = String(now.getMinutes()).padStart(2, '0');
+                          setCustomTimeStr(m.time || `${hh}:${mm}`);
+                        }}
+                        title="Log specific time taken"
+                        className="px-2.5 py-1.5 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition text-xs flex items-center gap-1"
+                      >
+                        <i className="fas fa-clock text-[10px]"></i>
+                        <span className="text-[11px] hidden sm:inline">Set Time</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
