@@ -5,6 +5,8 @@ import { createServer as createViteServer } from 'vite';
 import { observabilityMiddleware } from './server/middleware/observability';
 import { healthRouter } from './server/routes/healthRoutes';
 import { aiRouter } from './server/routes/aiRoutes';
+import { subscriptionRouter } from './server/routes/subscriptionRoutes';
+import { adminRouter } from './server/routes/adminRoutes';
 
 // AI Studio requires the dev server to run on port 3000.
 // In production container runtime, use process.env.PORT (e.g. 8080).
@@ -28,6 +30,8 @@ app.use(observabilityMiddleware);
 // API Endpoints
 app.use('/api', healthRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/subscription', subscriptionRouter);
+app.use('/api/admin', adminRouter);
 
 // Centralized error handler (Sanitizes stack traces from clients)
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {

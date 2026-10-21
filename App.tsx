@@ -18,8 +18,12 @@ import {
   SymptomEntry,
   CareProfile,
   DrugInteractionResult,
-  MedicationIntakeLog
+  MedicationIntakeLog,
+  UserSubscriptionInfo
 } from './types';
+import { PricingPlansView } from './components/PricingPlansView';
+import { BillingPortalModal } from './components/BillingPortalModal';
+import { BusinessAdminDashboard } from './components/BusinessAdminDashboard';
 import { GeminiService } from './services/geminiService';
 import { auth } from './services/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -29,6 +33,7 @@ import { EmergencyContacts } from './components/EmergencyContacts';
 import { HealthTrendsChart } from './components/HealthTrendsChart';
 import { MyMedications } from './components/MyMedications';
 import { MedicationCalendar } from './components/MedicationCalendar';
+import { WeeklyAdherenceTrendCard } from './components/WeeklyAdherenceTrendCard';
 import { PDFExportService } from './services/pdfExportService';
 import { AiHealthChat } from './components/AiHealthChat';
 import { SavedReportsView } from './components/SavedReportsView';
@@ -1859,6 +1864,14 @@ function MediMindAppContent() {
 
   // User Auth & Persistence
   const [user, setUser] = useState<User | null>(null);
+  const [showBillingModal, setShowBillingModal] = useState(false);
+  const [subscription, setSubscription] = useState<UserSubscriptionInfo>({
+    planId: 'free',
+    billingInterval: 'monthly',
+    status: 'active',
+    currentPeriodEnd: Date.now() + 30 * 24 * 60 * 60 * 1000,
+    cancelAtPeriodEnd: false
+  });
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (currentUser) => {
@@ -1866,6 +1879,24 @@ function MediMindAppContent() {
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    const fetchSub = async () => {
+      try {
+        const uid = user?.uid || 'anonymous_user';
+        const res = await fetch(`/api/subscription/status?userId=${encodeURIComponent(uid)}`, {
+          headers: { 'x-user-id': uid }
+        });
+        const data = await res.json();
+        if (data.success && data.subscription) {
+          setSubscription(data.subscription);
+        }
+      } catch (err) {
+        console.warn('[Subscription Sync Error]', err);
+      }
+    };
+    fetchSub();
+  }, [user]);
 
   const [medications, setMedications] = useState<Medication[]>(() => {
     try {
@@ -2226,6 +2257,7 @@ function MediMindAppContent() {
           toast.info('Signed out of session');
         }}
         onSignIn={() => setMode(AppMode.DASHBOARD)}
+        onOpenBilling={() => setShowBillingModal(true)}
       />
 
       {/* Main Content Viewport */}
@@ -2407,9 +2439,47 @@ function MediMindAppContent() {
                       <i className="fas fa-pills"></i>
                     </div>
                   </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-bold">{medications.length}</span>
-                    <span className="text-xs text-slate-500">regimens</span>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-bold">{medications.length}</span>
+                      <span className="text-xs text-slate-500">regimens</span>
+                    </div>
+                    {/* Weekly Adherence Score Chip */}
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMode(AppMode.MEDICATION_CALENDAR);
+                      }}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 flex items-center gap-1 hover:scale-105 transition-transform"
+                      title="Weekly adherence compliance score"
+                    >
+                      <i className="fas fa-chart-line text-[9px]"></i>
+                      {(() => {
+                        const now = new Date();
+                        const currentDayOfWeek = now.getDay();
+                        const distanceToMonday = (currentDayOfWeek + 6) % 7;
+                        const monday = new Date(now);
+                        monday.setDate(now.getDate() - distanceToMonday);
+                        monday.setHours(0, 0, 0, 0);
+
+                        let sched = 0;
+                        let taken = 0;
+                        const todayLocal = now.toISOString().split('T')[0];
+
+                        for (let d = 0; d < 7; d++) {
+                          const dateObj = new Date(monday);
+                          dateObj.setDate(monday.getDate() + d);
+                          const dStr = dateObj.toISOString().split('T')[0];
+                          if (dStr <= todayLocal) {
+                            sched += medications.length;
+                            const dLogs = medicationLogs.filter((l) => l.takenDate === dStr && l.status === 'taken');
+                            taken += dLogs.length;
+                          }
+                        }
+                        const score = sched > 0 ? Math.min(100, Math.round((taken / sched) * 100)) : 100;
+                        return `${score}% weekly`;
+                      })()}
+                    </span>
                   </div>
                   <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1">
                     <span
@@ -2519,6 +2589,16 @@ function MediMindAppContent() {
                   setAnalysis(null);
                   setMode(AppMode.ANALYSIS);
                 }}
+              />
+
+              {/* Weekly Medication Adherence Trend & Compliance Card */}
+              <WeeklyAdherenceTrendCard
+                medications={medications}
+                logs={medicationLogs}
+                darkMode={darkMode}
+                highContrast={isHighContrast}
+                onOpenCalendar={() => setMode(AppMode.MEDICATION_CALENDAR)}
+                onOpenMyMeds={() => setMode(AppMode.MY_MEDS)}
               />
 
               {/* Primary Clinical Capabilities Grid */}
@@ -2972,8 +3052,58 @@ function MediMindAppContent() {
               />
             </div>
           )}
+
+          {/* ==================================== */}
+          {/* 14. PLANS & PRICING                  */}
+          {/* ==================================== */}
+          {mode === AppMode.PRICING && (
+            <div className="animate-fade-in">
+              <PricingPlansView
+                currentPlanId={subscription.planId}
+                userId={user?.uid || 'anonymous_user'}
+                userEmail={user?.email || 'patient@medimind.ai'}
+                userName={user?.displayName || 'Patient'}
+                onUpgradeSuccess={(updatedSub) => {
+                  setSubscription(updatedSub);
+                  toast.success(`Successfully upgraded to MediMind ${updatedSub.planId.toUpperCase()}!`);
+                  setMode(AppMode.DASHBOARD);
+                }}
+                onClose={() => setMode(AppMode.DASHBOARD)}
+              />
+            </div>
+          )}
+
+          {/* ==================================== */}
+          {/* 15. BUSINESS ADMIN COMMAND CENTER    */}
+          {/* ==================================== */}
+          {mode === AppMode.ADMIN_DASHBOARD && (
+            <div className="animate-fade-in">
+              <BusinessAdminDashboard
+                userEmail={user?.email || 'rautp0476@gmail.com'}
+                onClose={() => setMode(AppMode.DASHBOARD)}
+              />
+            </div>
+          )}
         </main>
       </div>
+
+      {/* Subscription & Billing Portal Modal */}
+      {showBillingModal && (
+        <BillingPortalModal
+          userId={user?.uid || 'anonymous_user'}
+          userEmail={user?.email || 'patient@medimind.ai'}
+          subscription={subscription}
+          onClose={() => setShowBillingModal(false)}
+          onNavigateToPricing={() => {
+            setShowBillingModal(false);
+            setMode(AppMode.PRICING);
+          }}
+          onSubscriptionUpdated={(updated) => {
+            setSubscription(updated);
+            toast.info('Subscription preferences updated.');
+          }}
+        />
+      )}
     </div>
   );
 }

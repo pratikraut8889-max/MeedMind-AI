@@ -130,6 +130,12 @@ service cloud.firestore {
         && (data.notes == null || (data.notes is string && data.notes.size() <= 500));
     }
 
+    function isValidSubscription(data) {
+      return data.userId == request.auth.uid
+        && data.planId in ['free', 'premium', 'pro']
+        && data.status in ['active', 'past_due', 'canceled', 'expired'];
+    }
+
     // Collection Security Rules
 
     // User Profile Rules
@@ -231,6 +237,28 @@ service cloud.firestore {
         allow create: if isOwner(userId) && isValidId(logId) && isValidMedicationLog(incoming());
         allow update: if isOwner(userId) && isValidId(logId) && isValidMedicationLog(incoming());
         allow delete: if isOwner(userId) && isValidId(logId);
+      }
+
+      // SaaS Subscription record
+      match /subscription/{subId} {
+        allow get: if isOwner(userId) && isValidId(subId);
+        allow list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(subId) && isValidSubscription(incoming());
+        allow delete: if false;
+      }
+
+      // Billing & Invoices record
+      match /payments/{paymentId} {
+        allow get: if isOwner(userId) && isValidId(paymentId);
+        allow list: if isOwner(userId);
+        allow create, update, delete: if false;
+      }
+
+      // Usage accounting record
+      match /usage/{usageId} {
+        allow get: if isOwner(userId) && isValidId(usageId);
+        allow list: if isOwner(userId);
+        allow create, update, delete: if false;
       }
     }
   }

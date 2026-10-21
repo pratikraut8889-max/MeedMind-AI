@@ -14,7 +14,9 @@ export enum AppMode {
   SAVED_REPORTS = 'SAVED_REPORTS',
   PRIVACY_POLICY = 'PRIVACY_POLICY',
   SYMPTOM_JOURNAL = 'SYMPTOM_JOURNAL',
-  MEDICATION_CALENDAR = 'MEDICATION_CALENDAR'
+  MEDICATION_CALENDAR = 'MEDICATION_CALENDAR',
+  PRICING = 'PRICING',
+  ADMIN_DASHBOARD = 'ADMIN_DASHBOARD'
 }
 
 export enum AccessibilityMode {
@@ -296,5 +298,25 @@ export interface SymptomEntry {
   triggers?: string; // e.g., "Stress, lack of sleep"
   notes?: string; // e.g., "Relieved slightly after dark room and hydration"
   createdAt?: number;
+}
+
+export interface UserSubscriptionInfo {
+  planId: 'free' | 'premium' | 'pro';
+  billingInterval: 'monthly' | 'annual';
+  status: 'active' | 'past_due' | 'canceled' | 'expired';
+  currentPeriodEnd: number;
+  cancelAtPeriodEnd: boolean;
+  orderId?: string;
+  paymentId?: string;
+}
+
+export interface UserUsageInfo {
+  dailyChatCount: number;
+  dailyChatLimit: number;
+  monthlyReportCount: number;
+  monthlyReportLimit: number;
+  totalTokensProcessed: number;
+  estimatedCostUsd: number;
+  resetsAt: string;
 }
 

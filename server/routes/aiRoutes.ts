@@ -5,6 +5,7 @@ import { getOpenModelConfig, getLegacyGeminiConfig } from '../ai/modelConfig';
 import { sanitizeUserInput } from '../ai/safety/sanitizer';
 import { validateBase64Upload } from '../middleware/fileUploadValidator';
 import { createRateLimiter } from '../middleware/rateLimiter';
+import { requireAiQuota, recordAiUsage } from '../middleware/usageAccounting';
 import { runChatWorkflow } from '../ai/workflows/chatWorkflow';
 import { runReportAnalysisWorkflow } from '../ai/workflows/reportAnalysisWorkflow';
 import { runSymptomAnalysisWorkflow } from '../ai/workflows/symptomAnalysisWorkflow';
@@ -51,7 +52,7 @@ aiRouter.get('/status', (_req: Request, res: Response): void => {
  * 1. AI Health Assistant Chat (Workflow 1)
  * POST /api/ai/chat
  */
-aiRouter.post('/chat', chatLimiter, async (req: Request, res: Response): Promise<void> => {
+aiRouter.post('/chat', chatLimiter, requireAiQuota('chat'), async (req: Request, res: Response): Promise<void> => {
   try {
     const { query, language = 'English', history = [], userContext } = req.body;
 
@@ -66,6 +67,10 @@ aiRouter.post('/chat', chatLimiter, async (req: Request, res: Response): Promise
       history,
       userContext
     });
+
+    // Record AI consumption against user's quota and business metrics
+    const userId = (req as any).resolvedUserId || req.body.userId || 'anonymous_user';
+    recordAiUsage(userId, 'chat', (result.metadata as any)?.promptTokens || 350, (result.metadata as any)?.completionTokens || 450);
 
     res.status(200).json({
       success: true,
@@ -92,7 +97,7 @@ aiRouter.post('/chat', chatLimiter, async (req: Request, res: Response): Promise
  * 2. Medical Report Analyzer (Workflow 2)
  * POST /api/ai/analyze-report
  */
-aiRouter.post('/analyze-report', uploadLimiter, async (req: Request, res: Response): Promise<void> => {
+aiRouter.post('/analyze-report', uploadLimiter, requireAiQuota('report_analysis'), async (req: Request, res: Response): Promise<void> => {
   try {
     const { fileBase64, mimeType, language = 'English', currentMeds = '', location = '' } = req.body;
 
@@ -109,6 +114,10 @@ aiRouter.post('/analyze-report', uploadLimiter, async (req: Request, res: Respon
       currentMeds,
       location
     });
+
+    // Record AI consumption against user's monthly report allowance
+    const userId = (req as any).resolvedUserId || req.body.userId || 'anonymous_user';
+    recordAiUsage(userId, 'report_analysis', (result.metadata as any)?.promptTokens || 1200, (result.metadata as any)?.completionTokens || 1500);
 
     res.status(200).json({
       success: true,
@@ -341,7 +350,7 @@ aiRouter.post('/medication-interactions', chatLimiter, async (req: Request, res:
  * 6. Doctor Letter Generation (Workflow 6)
  * POST /api/ai/doctor-letter
  */
-aiRouter.post('/doctor-letter', chatLimiter, async (req: Request, res: Response): Promise<void> => {
+aiRouter.post('/doctor-letter', chatLimiter, requireAiQuota('letter'), async (req: Request, res: Response): Promise<void> => {
   try {
     const { analysis, patientName = 'The Patient', language = 'English' } = req.body;
 
@@ -355,6 +364,9 @@ aiRouter.post('/doctor-letter', chatLimiter, async (req: Request, res: Response)
       patientName,
       language
     });
+
+    const userId = (req as any).resolvedUserId || req.body.userId || 'anonymous_user';
+    recordAiUsage(userId, 'letter', 800, 1000);
 
     res.status(200).json({
       success: true,
@@ -439,7 +451,7 @@ aiRouter.post('/body-scan', uploadLimiter, async (req: Request, res: Response): 
  * 9. Text-to-Speech Generation (Gemini TTS)
  * POST /api/ai/tts
  */
-aiRouter.post('/tts', chatLimiter, async (req: Request, res: Response): Promise<void> => {
+aiRouter.post('/tts', chatLimiter, requireAiQuota('tts'), async (req: Request, res: Response): Promise<void> => {
   try {
     const { text, language = 'English' } = req.body;
 
@@ -470,6 +482,9 @@ aiRouter.post('/tts', chatLimiter, async (req: Request, res: Response): Promise<
       res.status(404).json({ error: 'AUDIO_GENERATION_FAILED', message: 'Could not generate speech audio' });
       return;
     }
+
+    const userId = (req as any).resolvedUserId || req.body.userId || 'anonymous_user';
+    recordAiUsage(userId, 'tts', 150, 200);
 
     res.status(200).json({
       success: true,

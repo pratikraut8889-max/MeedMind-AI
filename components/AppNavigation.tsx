@@ -16,6 +16,7 @@ interface AppNavigationProps {
   userEmail?: string | null;
   onSignOut?: () => void;
   onSignIn?: () => void;
+  onOpenBilling?: () => void;
 }
 
 export const AppNavigation: React.FC<AppNavigationProps> = ({
@@ -31,7 +32,8 @@ export const AppNavigation: React.FC<AppNavigationProps> = ({
   onLanguageChange,
   userEmail,
   onSignOut,
-  onSignIn
+  onSignIn,
+  onOpenBilling
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -101,7 +103,21 @@ export const AppNavigation: React.FC<AppNavigationProps> = ({
       icon: 'fas fa-folder-open',
       description: 'Clinical archives & PDF export',
       count: savedReportsCount
-    }
+    },
+    {
+      mode: AppMode.PRICING,
+      label: 'Plans & Pricing',
+      icon: 'fas fa-gem',
+      description: 'Transparent SaaS subscription tiers',
+      badge: 'Upgrade'
+    },
+    ...(userEmail && userEmail.toLowerCase().trim() === 'rautp0476@gmail.com' ? [{
+      mode: AppMode.ADMIN_DASHBOARD,
+      label: 'Admin Command',
+      icon: 'fas fa-chart-line',
+      description: 'Commercial KPIs & MRR metrics',
+      badge: 'Owner'
+    }] : [])
   ];
 
   const handleNavClick = (mode: AppMode) => {
@@ -248,6 +264,21 @@ export const AppNavigation: React.FC<AppNavigationProps> = ({
             <i className="fas fa-shield-check text-xs"></i>
             <span>HIPAA & Security Compliance</span>
           </button>
+
+          {/* Billing Portal Trigger */}
+          {onOpenBilling && (
+            <button
+              onClick={onOpenBilling}
+              className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
+                darkMode
+                  ? 'text-teal-400 hover:text-teal-300'
+                  : 'text-teal-700 hover:text-teal-900'
+              }`}
+            >
+              <i className="fas fa-credit-card text-xs"></i>
+              <span>Billing & Usage Quota</span>
+            </button>
+          )}
 
           {/* Patient Account Pill */}
           <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between text-xs px-1">

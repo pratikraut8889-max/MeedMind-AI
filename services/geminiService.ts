@@ -10,6 +10,15 @@ import {
   DrugInteractionResult,
   AiEngineStatus
 } from '../types';
+import { auth } from './firebase';
+
+function getAiHeaders(): Record<string, string> {
+  const uid = auth?.currentUser?.uid || 'anonymous_user';
+  return {
+    'Content-Type': 'application/json',
+    'x-user-id': uid
+  };
+}
 
 // Audio Helper for raw PCM decoding if server returns raw audio
 function decode(base64: string) {
@@ -60,7 +69,7 @@ export const GeminiService = {
   ): Promise<any> => {
     const res = await fetch('/api/ai/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAiHeaders(),
       body: JSON.stringify({ query, language, history, userContext })
     });
 
@@ -85,7 +94,7 @@ export const GeminiService = {
   ): Promise<AnalysisResult> => {
     const res = await fetch('/api/ai/analyze-report', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAiHeaders(),
       body: JSON.stringify({
         fileBase64,
         mimeType,
@@ -114,7 +123,7 @@ export const GeminiService = {
   ): Promise<DoctorLetter> => {
     const res = await fetch('/api/ai/doctor-letter', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAiHeaders(),
       body: JSON.stringify({ analysis, patientName, language })
     });
 
@@ -137,7 +146,7 @@ export const GeminiService = {
   ): Promise<string> => {
     const res = await fetch('/api/ai/emergency-triage', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAiHeaders(),
       body: JSON.stringify({ inputData, inputType, language })
     });
 
@@ -159,7 +168,7 @@ export const GeminiService = {
   ): Promise<VisualSymptomResult> => {
     const res = await fetch('/api/ai/symptom-check', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAiHeaders(),
       body: JSON.stringify({ base64Image, language, mimeType: 'image/jpeg' })
     });
 
@@ -181,7 +190,7 @@ export const GeminiService = {
   ): Promise<MedicationAnalysisResult> => {
     const res = await fetch('/api/ai/medication-check', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAiHeaders(),
       body: JSON.stringify({ base64Image, language, mimeType: 'image/jpeg' })
     });
 
@@ -205,7 +214,7 @@ export const GeminiService = {
   ): Promise<PillVerificationResult> => {
     const res = await fetch('/api/ai/pill-verify', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAiHeaders(),
       body: JSON.stringify({ base64Image, medicationName, dosage, language, mimeType: 'image/jpeg' })
     });
 
@@ -238,7 +247,7 @@ export const GeminiService = {
   ): Promise<DrugInteractionResult> => {
     const res = await fetch('/api/ai/medication-interactions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAiHeaders(),
       body: JSON.stringify({
         newMedication,
         dosage,
@@ -295,7 +304,7 @@ export const GeminiService = {
   ): Promise<Vaccine[]> => {
     const res = await fetch('/api/ai/vaccines', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAiHeaders(),
       body: JSON.stringify({ base64Image, language, mimeType: 'image/jpeg' })
     });
 
@@ -317,7 +326,7 @@ export const GeminiService = {
   ): Promise<BodyScanResult> => {
     const res = await fetch('/api/ai/body-scan', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAiHeaders(),
       body: JSON.stringify({ base64Image, language, mimeType: 'image/jpeg' })
     });
 
@@ -338,7 +347,7 @@ export const GeminiService = {
       // First try server-side TTS
       const res = await fetch('/api/ai/tts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAiHeaders(),
         body: JSON.stringify({ text, language })
       });
 
@@ -383,7 +392,7 @@ export const GeminiService = {
     try {
       const res = await fetch('/api/ai/quick-summary', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAiHeaders(),
         body: JSON.stringify({ fileName, summary, redFlags, labMeasurements, language })
       });
       if (res.ok) {
