@@ -102,6 +102,8 @@ service cloud.firestore {
         && (data.triggers == null || (data.triggers is string && data.triggers.size() <= 300))
         && (data.notes == null || (data.notes is string && data.notes.size() <= 500))
         && (data.createdAt == null || data.createdAt is int);
+    }
+
     function isValidCareProfile(data) {
       return data.name is string && data.name.size() <= 100
         && data.relationship is string && data.relationship.size() <= 100
@@ -113,6 +115,19 @@ service cloud.firestore {
         && (data.preferredLanguage == null || (data.preferredLanguage is string && data.preferredLanguage.size() <= 50))
         && (data.careNotes == null || (data.careNotes is string && data.careNotes.size() <= 1500))
         && (data.updatedAt == null || data.updatedAt is int);
+    }
+
+    function isValidMedicationLog(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.medicationId is string && data.medicationId.size() <= 128
+        && data.medicationName is string && data.medicationName.size() <= 100
+        && data.dosage is string && data.dosage.size() <= 50
+        && data.takenDate is string && data.takenDate.size() <= 10
+        && (data.takenTime == null || (data.takenTime is string && data.takenTime.size() <= 30))
+        && (data.scheduledTime == null || (data.scheduledTime is string && data.scheduledTime.size() <= 30))
+        && data.status in ['taken', 'missed', 'skipped']
+        && (data.timestamp == null || data.timestamp is int || data.timestamp is number)
+        && (data.notes == null || (data.notes is string && data.notes.size() <= 500));
     }
 
     // Collection Security Rules
@@ -207,6 +222,15 @@ service cloud.firestore {
         allow create: if isOwner(userId) && isValidId(profileId) && isValidCareProfile(incoming());
         allow update: if isOwner(userId) && isValidId(profileId) && isValidCareProfile(incoming());
         allow delete: if isOwner(userId) && isValidId(profileId);
+      }
+
+      // Medication Intake Logs subcollection (Calendar adherence & daily dosage history)
+      match /medicationLogs/{logId} {
+        allow get: if isOwner(userId) && isValidId(logId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(logId) && isValidMedicationLog(incoming());
+        allow update: if isOwner(userId) && isValidId(logId) && isValidMedicationLog(incoming());
+        allow delete: if isOwner(userId) && isValidId(logId);
       }
     }
   }

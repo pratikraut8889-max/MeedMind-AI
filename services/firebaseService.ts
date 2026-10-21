@@ -21,7 +21,7 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
-import { Medication, MoodEntry, StoredReport, Vaccine, HealthHistory, SymptomEntry, CareProfile } from '../types';
+import { Medication, MoodEntry, StoredReport, Vaccine, HealthHistory, SymptomEntry, CareProfile, MedicationIntakeLog } from '../types';
 
 // Google Auth Provider setup
 const googleProvider = new GoogleAuthProvider();
@@ -371,6 +371,41 @@ export const FirebaseService = {
     } catch (error) {
       handleFirestoreError(error, OperationType.GET, path);
       return null;
+    }
+  },
+
+  // Medication Intake Logs (Calendar Compliance History)
+  subscribeMedicationLogs(userId: string, callback: (logs: MedicationIntakeLog[]) => void) {
+    const path = `users/${userId}/medicationLogs`;
+    const q = collection(db, 'users', userId, 'medicationLogs');
+    return onSnapshot(q, (snap) => {
+      const list: MedicationIntakeLog[] = [];
+      snap.forEach((docSnap) => {
+        list.push(docSnap.data() as MedicationIntakeLog);
+      });
+      // Sort newest first
+      list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      callback(list);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
+    });
+  },
+
+  async saveMedicationLog(userId: string, log: MedicationIntakeLog) {
+    const path = `users/${userId}/medicationLogs/${log.id}`;
+    try {
+      await setDoc(doc(db, 'users', userId, 'medicationLogs', log.id), log);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
+  },
+
+  async deleteMedicationLog(userId: string, logId: string) {
+    const path = `users/${userId}/medicationLogs/${logId}`;
+    try {
+      await deleteDoc(doc(db, 'users', userId, 'medicationLogs', logId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
     }
   }
 };

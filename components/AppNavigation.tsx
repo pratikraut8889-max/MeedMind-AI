@@ -76,6 +76,13 @@ export const AppNavigation: React.FC<AppNavigationProps> = ({
       count: activeMedsCount
     },
     {
+      mode: AppMode.MEDICATION_CALENDAR,
+      label: 'Medication Calendar',
+      icon: 'fas fa-calendar-check',
+      description: 'Daily dosages & compliance grid',
+      badge: 'New'
+    },
+    {
       mode: AppMode.EMERGENCY,
       label: 'Emergency Mode',
       icon: 'fas fa-truck-medical',

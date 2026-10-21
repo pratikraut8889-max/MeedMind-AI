@@ -13,7 +13,8 @@ export enum AppMode {
   AI_CHAT = 'AI_CHAT',
   SAVED_REPORTS = 'SAVED_REPORTS',
   PRIVACY_POLICY = 'PRIVACY_POLICY',
-  SYMPTOM_JOURNAL = 'SYMPTOM_JOURNAL'
+  SYMPTOM_JOURNAL = 'SYMPTOM_JOURNAL',
+  MEDICATION_CALENDAR = 'MEDICATION_CALENDAR'
 }
 
 export enum AccessibilityMode {
@@ -142,6 +143,30 @@ export interface Medication {
   pillColor?: string | null;
   pillShape?: string | null;
   pillImprint?: string | null;
+}
+
+export interface MedicationIntakeLog {
+  id: string;
+  medicationId: string;
+  medicationName: string;
+  dosage: string;
+  scheduledTime?: string;
+  takenDate: string; // YYYY-MM-DD
+  takenTime?: string; // e.g. "08:30 AM"
+  status: 'taken' | 'missed' | 'skipped';
+  timestamp: number;
+  notes?: string;
+}
+
+export interface DayComplianceSummary {
+  date: string; // YYYY-MM-DD
+  totalScheduled: number;
+  totalTaken: number;
+  totalMissed: number;
+  totalSkipped: number;
+  complianceRate: number; // 0 - 100 percentage
+  status: 'full' | 'partial' | 'missed' | 'scheduled' | 'none';
+  logs: MedicationIntakeLog[];
 }
 
 export interface DrugInteraction {

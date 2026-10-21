@@ -17,7 +17,8 @@ import {
   HealthMetricEntry,
   SymptomEntry,
   CareProfile,
-  DrugInteractionResult
+  DrugInteractionResult,
+  MedicationIntakeLog
 } from './types';
 import { GeminiService } from './services/geminiService';
 import { auth } from './services/firebase';
@@ -27,6 +28,7 @@ import { AuthScreen } from './components/AuthScreen';
 import { EmergencyContacts } from './components/EmergencyContacts';
 import { HealthTrendsChart } from './components/HealthTrendsChart';
 import { MyMedications } from './components/MyMedications';
+import { MedicationCalendar } from './components/MedicationCalendar';
 import { PDFExportService } from './services/pdfExportService';
 import { AiHealthChat } from './components/AiHealthChat';
 import { SavedReportsView } from './components/SavedReportsView';
@@ -1897,6 +1899,55 @@ function MediMindAppContent() {
     }
   });
 
+  // Medication Intake Logs State (Compliance Calendar)
+  const [medicationLogs, setMedicationLogs] = useState<MedicationIntakeLog[]>(() => {
+    try {
+      const saved = localStorage.getItem('medimind_medication_logs');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Seed initial adherence history if medications exist but logs are empty
+  useEffect(() => {
+    if (medications.length > 0 && medicationLogs.length === 0) {
+      const seedList: MedicationIntakeLog[] = [];
+      const now = new Date();
+
+      for (let i = 1; i <= 21; i++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+
+        medications.forEach((m, idx) => {
+          const isMissed = (i === 7 && idx === 0);
+          seedList.push({
+            id: `seed_${dateStr}_${m.id}`,
+            medicationId: m.id,
+            medicationName: m.name,
+            dosage: m.dosage,
+            scheduledTime: m.time || '08:00',
+            takenDate: dateStr,
+            takenTime: isMissed ? undefined : m.time || '08:15',
+            status: isMissed ? 'missed' : 'taken',
+            timestamp: d.getTime(),
+            notes: isMissed ? 'Missed due to fasting morning lab test' : 'Taken with water'
+          });
+        });
+      }
+
+      if (seedList.length > 0) {
+        setMedicationLogs(seedList);
+        localStorage.setItem('medimind_medication_logs', JSON.stringify(seedList));
+      }
+    }
+  }, [medications, medicationLogs.length]);
+
+  useEffect(() => {
+    localStorage.setItem('medimind_medication_logs', JSON.stringify(medicationLogs));
+  }, [medicationLogs]);
+
   const isHighContrast = accessMode === AccessibilityMode.HIGH_CONTRAST;
 
   useEffect(() => {
@@ -1937,11 +1988,60 @@ function MediMindAppContent() {
         setMedications(list);
       }
     });
+    const unsubCareProfile = FirebaseService.subscribeCareProfile(user.uid, (p) => {
+      if (p) {
+        setCareProfile(p);
+      }
+    });
+    const unsubMedLogs = FirebaseService.subscribeMedicationLogs(user.uid, (logs) => {
+      if (logs && logs.length > 0) {
+        setMedicationLogs(logs);
+      }
+    });
     return () => {
       unsubSymptoms();
       unsubMeds();
+      unsubCareProfile();
+      unsubMedLogs();
     };
   }, [user]);
+
+  // Care Profile ("Build for a Friend") Save Handler
+  const handleSaveCareProfile = async (newProfile: CareProfile) => {
+    setCareProfile(newProfile);
+    localStorage.setItem('medimind_care_profile', JSON.stringify(newProfile));
+    if (user) {
+      await FirebaseService.saveCareProfile(user.uid, newProfile);
+    }
+  };
+
+  // Medication Intake Log Handlers (Calendar Adherence)
+  const handleLogIntake = async (logData: Omit<MedicationIntakeLog, 'id' | 'timestamp'> & { id?: string }) => {
+    const logId = logData.id || `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const fullLog: MedicationIntakeLog = {
+      ...logData,
+      id: logId,
+      timestamp: Date.now()
+    };
+
+    setMedicationLogs((prev) => {
+      const filtered = prev.filter(
+        (l) => l.id !== logId && !(l.medicationId === logData.medicationId && l.takenDate === logData.takenDate)
+      );
+      return [fullLog, ...filtered];
+    });
+
+    if (user) {
+      await FirebaseService.saveMedicationLog(user.uid, fullLog);
+    }
+  };
+
+  const handleDeleteMedicationLog = async (logId: string) => {
+    setMedicationLogs((prev) => prev.filter((l) => l.id !== logId));
+    if (user) {
+      await FirebaseService.deleteMedicationLog(user.uid, logId);
+    }
+  };
 
   // Symptom Journal Mutation Handlers
   const handleAddSymptom = async (entry: Omit<SymptomEntry, 'id' | 'createdAt'>) => {
@@ -2081,6 +2181,28 @@ function MediMindAppContent() {
         highContrast={isHighContrast}
       />
 
+      {/* Care Profile ("Build for a Friend" Personalization Modal) */}
+      <CareProfileModal
+        isOpen={showCareProfileModal}
+        onClose={() => setShowCareProfileModal(false)}
+        profile={careProfile}
+        onSave={async (newProfile) => {
+          await handleSaveCareProfile(newProfile);
+          setShowCareProfileModal(false);
+          toast.success(`Care profile updated for ${newProfile.name || 'friend'}`);
+        }}
+        darkMode={darkMode}
+        highContrast={isHighContrast}
+      />
+
+      {/* Open-Source AI Architecture Transparency Modal */}
+      <OpenAiTransparencyModal
+        isOpen={showOpenAiModal}
+        onClose={() => setShowOpenAiModal(false)}
+        darkMode={darkMode}
+        highContrast={isHighContrast}
+      />
+
       {/* Primary Navigation Component */}
       <AppNavigation
         currentMode={mode}
@@ -2132,6 +2254,17 @@ function MediMindAppContent() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Open-Source AI Architecture Transparency Button */}
+            <button
+              id="open-ai-transparency-btn"
+              onClick={() => setShowOpenAiModal(true)}
+              className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400"
+              title="Open-Source Model Architecture & RAG Pipeline"
+            >
+              <i className="fas fa-microchip"></i>
+              <span className="hidden sm:inline">About AI</span>
+            </button>
+
             {/* Wellness check-in quick trigger */}
             <button
               onClick={() => setShowWellnessModal(true)}
@@ -2178,11 +2311,23 @@ function MediMindAppContent() {
               {/* Executive Patient Welcome */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300">
+                      Medical Intelligence Hub
+                    </span>
+                    <span className="text-xs text-slate-400">• HIPAA Compliant Session</span>
+                  </div>
                   <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
-                    Clinical Overview & Health Hub
+                    {careProfile?.name
+                      ? `Care Dashboard for ${careProfile.name}`
+                      : user?.displayName
+                      ? `Clinical Overview for ${user.displayName}`
+                      : 'Clinical Overview & Health Hub'}
                   </h1>
                   <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                    Real-time clinical second opinions, lab report translation, and medication schedules
+                    {careProfile?.name
+                      ? `Active personalization for your ${careProfile.relationship.toLowerCase()} • Health goals, allergy alerts, and plain-language notes`
+                      : 'Real-time clinical second opinions, lab report translation, and medication schedules'}
                   </p>
                 </div>
 
@@ -2208,6 +2353,15 @@ function MediMindAppContent() {
                   </Button>
                 </div>
               </div>
+
+              {/* Care Profile ("Build for a Friend" Hacktoberfest personalization banner) */}
+              <CareProfileSection
+                profile={careProfile}
+                onEdit={() => setShowCareProfileModal(true)}
+                onAskAiForFriend={() => setMode(AppMode.AI_CHAT)}
+                darkMode={darkMode}
+                highContrast={isHighContrast}
+              />
 
               {/* Bento Row: Clinical Quick Status Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -2258,7 +2412,17 @@ function MediMindAppContent() {
                     <span className="text-xs text-slate-500">regimens</span>
                   </div>
                   <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1">
-                    <span>Scheduled dosage reminders</span>
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMode(AppMode.MEDICATION_CALENDAR);
+                      }}
+                      className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline flex items-center gap-1"
+                      title="Open Medication Calendar and compliance grid"
+                    >
+                      <i className="fas fa-calendar-check text-[10px]"></i>
+                      <span>Calendar Grid →</span>
+                    </span>
                     <span className="text-purple-600 font-semibold">Manage Rx →</span>
                   </div>
                 </Card>
@@ -2513,6 +2677,7 @@ function MediMindAppContent() {
                 onAskAssistant={() => setMode(AppMode.AI_CHAT)}
                 onWellnessCheckin={() => setShowWellnessModal(true)}
                 onLogSymptom={() => setMode(AppMode.SYMPTOM_JOURNAL)}
+                onOpenCalendar={() => setMode(AppMode.MEDICATION_CALENDAR)}
                 darkMode={darkMode}
               />
             </div>
@@ -2567,6 +2732,7 @@ function MediMindAppContent() {
                 darkMode={darkMode}
                 highContrast={isHighContrast}
                 onBack={() => setMode(AppMode.DASHBOARD)}
+                careProfile={careProfile}
               />
             </div>
           )}
@@ -2628,8 +2794,9 @@ function MediMindAppContent() {
             <div className="animate-fade-in">
               <MyMedications
                 medications={medications}
-                patientName={user?.displayName || user?.email?.split('@')[0] || ''}
+                patientName={careProfile?.name || user?.displayName || user?.email?.split('@')[0] || ''}
                 onAdd={() => setMode(AppMode.ADD_MEDICATION)}
+                onOpenCalendar={() => setMode(AppMode.MEDICATION_CALENDAR)}
                 onTake={async (id: string, customTime?: string) => {
                   const today = new Date().toISOString().split('T')[0];
                   const timeStr =
@@ -2646,6 +2813,19 @@ function MediMindAppContent() {
                       lastTakenTime: timeStr
                     });
                   }
+                  // Also record to medication intake compliance log
+                  const targetMed = medications.find((m) => m.id === id);
+                  if (targetMed) {
+                    await handleLogIntake({
+                      medicationId: targetMed.id,
+                      medicationName: targetMed.name,
+                      dosage: targetMed.dosage,
+                      scheduledTime: targetMed.time,
+                      takenDate: today,
+                      takenTime: timeStr,
+                      status: 'taken'
+                    });
+                  }
                 }}
                 onDelete={async (id: string) => {
                   setMedications(medications.filter((m) => m.id !== id));
@@ -2656,6 +2836,26 @@ function MediMindAppContent() {
                 }}
                 highContrast={isHighContrast}
                 darkMode={darkMode}
+              />
+            </div>
+          )}
+
+          {/* ==================================== */}
+          {/* 7b. MEDICATION CALENDAR VIEW         */}
+          {/* ==================================== */}
+          {mode === AppMode.MEDICATION_CALENDAR && (
+            <div className="animate-fade-in">
+              <MedicationCalendar
+                medications={medications}
+                logs={medicationLogs}
+                onLogIntake={handleLogIntake}
+                onDeleteLog={handleDeleteMedicationLog}
+                onBack={() => setMode(AppMode.DASHBOARD)}
+                onOpenMyMeds={() => setMode(AppMode.MY_MEDS)}
+                patientName={careProfile?.name || user?.displayName || user?.email?.split('@')[0] || ''}
+                careProfile={careProfile}
+                darkMode={darkMode}
+                highContrast={isHighContrast}
               />
             </div>
           )}
@@ -2678,6 +2878,8 @@ function MediMindAppContent() {
                 language={language}
                 highContrast={isHighContrast}
                 darkMode={darkMode}
+                existingMedications={medications}
+                careProfile={careProfile}
               />
             </div>
           )}

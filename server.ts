@@ -6,7 +6,10 @@ import { observabilityMiddleware } from './server/middleware/observability';
 import { healthRouter } from './server/routes/healthRoutes';
 import { aiRouter } from './server/routes/aiRoutes';
 
-const PORT = parseInt(process.env.PORT || '3000', 10);
+// AI Studio requires the dev server to run on port 3000.
+// In production container runtime, use process.env.PORT (e.g. 8080).
+const isProd = process.env.NODE_ENV === 'production';
+const PORT = isProd ? parseInt(process.env.PORT || '8080', 10) : 3000;
 const app = express();
 
 // Security headers and CORS
@@ -37,9 +40,12 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 });
 
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production') {
+  if (!isProd) {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false
+      },
       appType: 'spa'
     });
     app.use(vite.middlewares);

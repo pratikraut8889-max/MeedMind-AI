@@ -134,6 +134,24 @@
         "updatedAt": { "type": "number" }
       },
       "required": ["name", "relationship"]
+    },
+    "MedicationIntakeLog": {
+      "title": "MedicationIntakeLog",
+      "description": "Historical medication intake compliance log and dosage records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "medicationId": { "type": "string", "maxLength": 128 },
+        "medicationName": { "type": "string", "maxLength": 100 },
+        "dosage": { "type": "string", "maxLength": 50 },
+        "takenDate": { "type": "string", "format": "date" },
+        "takenTime": { "type": "string", "maxLength": 30 },
+        "scheduledTime": { "type": "string", "maxLength": 30 },
+        "status": { "type": "string", "enum": ["taken", "missed", "skipped"] },
+        "timestamp": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["id", "medicationId", "medicationName", "dosage", "takenDate", "status"]
     }
   },
   "firestore": {
@@ -144,6 +162,10 @@
     "/users/{userId}/medications/{medicationId}": {
       "schema": "Medication",
       "description": "Store user tracked medications"
+    },
+    "/users/{userId}/medicationLogs/{logId}": {
+      "schema": "MedicationIntakeLog",
+      "description": "Store user medication intake logs and compliance history"
     },
     "/users/{userId}/moods/{moodId}": {
       "schema": "MoodEntry",

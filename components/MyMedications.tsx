@@ -9,6 +9,7 @@ interface MyMedicationsProps {
   onAdd: () => void;
   onTake: (id: string, time?: string) => void;
   onDelete?: (id: string) => void;
+  onOpenCalendar?: () => void;
   highContrast: boolean;
   darkMode: boolean;
   patientName?: string;
@@ -19,6 +20,7 @@ export const MyMedications: React.FC<MyMedicationsProps> = ({
   onAdd,
   onTake,
   onDelete,
+  onOpenCalendar,
   highContrast,
   darkMode,
   patientName = ''
@@ -470,6 +472,23 @@ export const MyMedications: React.FC<MyMedicationsProps> = ({
           <p className="text-xs opacity-60">Scheduled reminders, automated alarms & printable adherence regimens</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {onOpenCalendar && (
+            <button
+              id="view-medication-calendar-btn"
+              type="button"
+              onClick={onOpenCalendar}
+              title="View daily dosage calendar and historical compliance"
+              className={`px-3 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
+                darkMode
+                  ? 'border-emerald-700/60 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/60'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+              }`}
+            >
+              <i className="fas fa-calendar-check text-emerald-500"></i>
+              <span>Medication Calendar</span>
+            </button>
+          )}
+
           <button
             id="print-medication-schedule-btn"
             onClick={() => setShowScheduleModal(true)}

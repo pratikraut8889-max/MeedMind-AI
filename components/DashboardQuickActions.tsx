@@ -5,6 +5,7 @@ interface DashboardQuickActionsProps {
   onAskAssistant: () => void;
   onWellnessCheckin: () => void;
   onLogSymptom?: () => void;
+  onOpenCalendar?: () => void;
   darkMode?: boolean;
 }
 
@@ -13,6 +14,7 @@ export const DashboardQuickActions: React.FC<DashboardQuickActionsProps> = ({
   onAskAssistant,
   onWellnessCheckin,
   onLogSymptom,
+  onOpenCalendar,
   darkMode = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -127,6 +129,27 @@ export const DashboardQuickActions: React.FC<DashboardQuickActionsProps> = ({
               </span>
               <div className="w-9 h-9 rounded-xl bg-teal-50 dark:bg-teal-950 text-teal-600 dark:text-teal-400 flex items-center justify-center text-sm group-hover:scale-110 transition-transform shrink-0">
                 <i className="fas fa-book-medical"></i>
+              </div>
+            </button>
+          )}
+
+          {/* Action 5: Medication Calendar & Compliance */}
+          {onOpenCalendar && (
+            <button
+              type="button"
+              id="quick-action-calendar"
+              onClick={() => {
+                setIsOpen(false);
+                onOpenCalendar();
+              }}
+              className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 shadow-xl hover:border-emerald-500 dark:hover:border-emerald-400 hover:shadow-2xl transition-all group active:scale-95"
+              aria-label="Medication Calendar & Compliance"
+            >
+              <span className="text-xs sm:text-sm font-semibold whitespace-nowrap">
+                Medication Calendar
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-sm group-hover:scale-110 transition-transform shrink-0">
+                <i className="fas fa-calendar-check"></i>
               </div>
             </button>
           )}
